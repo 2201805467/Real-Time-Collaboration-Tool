@@ -71,46 +71,6 @@ h1 {
   line-height: 1.8;
 }
 
-.status-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.status-grid article {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 14px;
-  min-height: 112px;
-  padding: 20px;
-  border: 1px solid #d9e1e5;
-  border-radius: 8px;
-  background: #ffffff;
-}
-
-.status-icon {
-  min-width: 34px;
-  color: #1f7a8c;
-  font-size: 0.78rem;
-  font-weight: 900;
-  line-height: 1.4;
-}
-
-.status-grid svg {
-  color: #1f7a8c;
-}
-
-.status-grid h2 {
-  margin-bottom: 8px;
-  font-size: 1.05rem;
-}
-
-.status-grid p {
-  margin-bottom: 0;
-  color: #5b6770;
-  line-height: 1.6;
-}
-
 .demo-panel {
   display: grid;
   gap: 18px;
@@ -172,13 +132,6 @@ h1 {
 .presence-empty {
   color: #687781;
   font-size: 0.9rem;
-}
-
-.message-form {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto;
-  gap: 14px;
-  align-items: end;
 }
 
 .board-form {
@@ -330,6 +283,40 @@ button:disabled {
   align-items: end;
 }
 
+.board-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 16px;
+  border: 1px solid #d9e1e5;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.board-edit-form,
+.add-column-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.danger-button,
+.icon-danger-button {
+  color: #9f1d1d;
+  background: #ffe7e7;
+}
+
+.danger-button:hover,
+.icon-danger-button:hover {
+  background: #ffd2d2;
+}
+
+.add-column-form {
+  margin-bottom: 14px;
+}
+
 .session-bar {
   display: flex;
   gap: 14px;
@@ -418,10 +405,12 @@ button:disabled {
   background: #dff3f7;
 }
 
-.kanban-column header {
+.kanban-column header,
+.column-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
 }
 
 .kanban-column h3 {
@@ -439,6 +428,36 @@ button:disabled {
   font-size: 0.82rem;
   font-weight: 900;
   text-align: center;
+}
+
+.column-title-form {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.column-title-form input {
+  min-height: 38px;
+  padding: 8px 10px;
+  font-weight: 800;
+}
+
+.column-meta,
+.details-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.icon-danger-button {
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 1.2rem;
+  line-height: 1;
 }
 
 .card-list {
@@ -578,13 +597,6 @@ button:disabled {
   line-height: 1.6;
 }
 
-.messages {
-  display: grid;
-  gap: 10px;
-  min-height: 130px;
-  align-content: start;
-}
-
 .empty-state {
   margin: 0;
   padding: 24px;
@@ -594,35 +606,8 @@ button:disabled {
   text-align: center;
 }
 
-.message {
-  display: grid;
-  gap: 6px;
-  padding: 14px;
-  border: 1px solid #e1e7ea;
-  border-radius: 8px;
-  background: #f8fafb;
-}
-
-.message strong {
-  color: #163840;
-}
-
-.message p {
-  margin-bottom: 0;
-  color: #2e3b43;
-  line-height: 1.6;
-  overflow-wrap: anywhere;
-}
-
-.message time {
-  color: #687781;
-  font-size: 0.85rem;
-}
-
 @media (max-width: 640px) {
   .intro,
-  .status-grid,
-  .message-form,
   .board-form {
     grid-template-columns: 1fr;
   }
@@ -800,7 +785,6 @@ button:disabled {
 }
 
 .workspace-shell .intro,
-.workspace-shell .status-grid,
 .workspace-shell .demo-panel,
 .workspace-shell .dashboard-panel {
   max-width: 1120px;
@@ -821,13 +805,9 @@ button:disabled {
   font-size: clamp(2rem, 4vw, 3rem);
 }
 
-.workspace-shell .status-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.workspace-shell .status-grid article,
 .workspace-shell .dashboard-panel,
 .workspace-shell .invite-panel,
+.workspace-shell .board-tools,
 .workspace-shell .share-panel,
 .workspace-shell .demo-panel,
 .workspace-shell .card-details {
@@ -846,6 +826,12 @@ button:disabled {
 
 .workspace-shell .share-panel {
   grid-template-columns: minmax(0, 1fr) minmax(300px, 1.2fr);
+  border-color: #d9def4;
+  background: rgb(250 248 255 / 0.78);
+}
+
+.workspace-shell .board-tools {
+  grid-template-columns: minmax(0, 1fr) auto;
   border-color: #d9def4;
   background: rgb(250 248 255 / 0.78);
 }
@@ -904,9 +890,13 @@ button:disabled {
   background: #e2dfff;
 }
 
+.workspace-shell .column-title-form input {
+  border-color: #d9def4;
+  background: rgb(255 255 255 / 0.82);
+}
+
 .workspace-shell .task-card,
-.workspace-shell .comment-card,
-.workspace-shell .message {
+.workspace-shell .comment-card {
   border-color: #e2e7ff;
   border-radius: 14px;
   background: #ffffff;
@@ -925,6 +915,12 @@ button:disabled {
 .workspace-shell .secondary-button {
   color: #3525cd;
   background: #e2dfff;
+}
+
+.workspace-shell .danger-button,
+.workspace-shell .icon-danger-button {
+  color: #9f1d1d;
+  background: #ffe2e2;
 }
 
 .workspace-shell .presence-strip {
@@ -974,6 +970,9 @@ button:disabled {
   }
 
   .share-actions,
+  .board-tools,
+  .board-edit-form,
+  .add-column-form,
   .workspace-shell .share-panel {
     grid-template-columns: 1fr;
   }

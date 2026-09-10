@@ -70,6 +70,9 @@ db.exec(`
     description TEXT NOT NULL DEFAULT '',
     assignee_id TEXT,
     due_date TEXT,
+    priority TEXT NOT NULL DEFAULT 'normal',
+    tags TEXT NOT NULL DEFAULT '[]',
+    checklist TEXT NOT NULL DEFAULT '[]',
     position INTEGER NOT NULL,
     version INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -110,6 +113,19 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_comments_card_id ON comments(card_id);
   CREATE INDEX IF NOT EXISTS idx_activity_logs_board_id ON activity_logs(board_id);
 `);
+
+function ensureColumn(tableName, columnName, definition) {
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all();
+  const hasColumn = columns.some((column) => column.name === columnName);
+
+  if (!hasColumn) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  }
+}
+
+ensureColumn('cards', 'priority', "TEXT NOT NULL DEFAULT 'normal'");
+ensureColumn('cards', 'tags', "TEXT NOT NULL DEFAULT '[]'");
+ensureColumn('cards', 'checklist', "TEXT NOT NULL DEFAULT '[]'");
 
 export function getDatabaseSummary() {
   const tables = db

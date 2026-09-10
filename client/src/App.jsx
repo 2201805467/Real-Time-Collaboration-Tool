@@ -66,11 +66,20 @@ function App() {
   const [selectedBoardId, setSelectedBoardId] = useState('');
   const [activeBoard, setActiveBoard] = useState(null);
   const [columns, setColumns] = useState([]);
+  const [editingBoardTitle, setEditingBoardTitle] = useState('');
+  const [newColumnTitle, setNewColumnTitle] = useState('');
+  const [columnDrafts, setColumnDrafts] = useState({});
   const [presenceUsers, setPresenceUsers] = useState([]);
   const [boardError, setBoardError] = useState('');
   const [isLoadingBoard, setIsLoadingBoard] = useState(false);
+  const [isSavingBoard, setIsSavingBoard] = useState(false);
+  const [isDeletingBoard, setIsDeletingBoard] = useState(false);
+  const [isCreatingColumn, setIsCreatingColumn] = useState(false);
+  const [savingColumnId, setSavingColumnId] = useState('');
+  const [deletingColumnId, setDeletingColumnId] = useState('');
   const [cardTitles, setCardTitles] = useState({});
   const [isCreatingCard, setIsCreatingCard] = useState('');
+  const [isDeletingCard, setIsDeletingCard] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState('');
   const [selectedCard, setSelectedCard] = useState(null);
   const [cardDetailsForm, setCardDetailsForm] = useState({ title: '', description: '', dueDate: '' });
@@ -80,8 +89,6 @@ function App() {
   const [isLoadingCardDetails, setIsLoadingCardDetails] = useState(false);
   const [isSavingCardDetails, setIsSavingCardDetails] = useState(false);
   const [isAddingComment, setIsAddingComment] = useState(false);
-  const [text, setText] = useState('');
-  const [messages, setMessages] = useState([]);
 
   useEffect(() => {
     if (!token) {
@@ -149,10 +156,6 @@ function App() {
       setIsConnected(false);
     }
 
-    function handleMessage(message) {
-      setMessages((currentMessages) => [message, ...currentMessages]);
-    }
-
     function handleCardCreated(payload) {
       setColumns((currentColumns) =>
         currentColumns.map((column) => {
@@ -167,6 +170,71 @@ function App() {
           return { ...column, cards: [...column.cards, payload.card] };
         })
       );
+    }
+
+    function handleBoardUpdated(payload) {
+      setBoards((currentBoards) =>
+        currentBoards.map((board) => (board.id === payload.board.id ? { ...board, ...payload.board } : board))
+      );
+      setActiveBoard((currentBoard) =>
+        currentBoard?.id === payload.board.id ? { ...currentBoard, ...payload.board } : currentBoard
+      );
+    }
+
+    function handleBoardDeleted(payload) {
+      setBoards((currentBoards) => currentBoards.filter((board) => board.id !== payload.boardId));
+      setSelectedBoardId((currentBoardId) => {
+        if (currentBoardId !== payload.boardId) {
+          return currentBoardId;
+        }
+
+        setActiveBoard(null);
+        setColumns([]);
+        setEditingBoardTitle('');
+        setColumnDrafts({});
+        closeCard();
+        return '';
+      });
+    }
+
+    function handleColumnCreated(payload) {
+      setColumns((currentColumns) => {
+        if (currentColumns.some((column) => column.id === payload.column.id)) {
+          return currentColumns;
+        }
+
+        return [...currentColumns, { ...payload.column, cards: [] }];
+      });
+      setColumnDrafts((currentDrafts) => ({
+        ...currentDrafts,
+        [payload.column.id]: payload.column.title
+      }));
+    }
+
+    function handleColumnUpdated(payload) {
+      setColumns((currentColumns) =>
+        currentColumns.map((column) =>
+          column.id === payload.column.id ? { ...column, title: payload.column.title } : column
+        )
+      );
+      setColumnDrafts((currentDrafts) => ({
+        ...currentDrafts,
+        [payload.column.id]: payload.column.title
+      }));
+    }
+
+    function handleColumnDeleted(payload) {
+      setColumns((currentColumns) => currentColumns.filter((column) => column.id !== payload.columnId));
+      setColumnDrafts((currentDrafts) => {
+        const nextDrafts = { ...currentDrafts };
+        delete nextDrafts[payload.columnId];
+        return nextDrafts;
+      });
+      setCardTitles((currentTitles) => {
+        const nextTitles = { ...currentTitles };
+        delete nextTitles[payload.columnId];
+        return nextTitles;
+      });
     }
 
     function handleCardMoved(payload) {
@@ -199,26 +267,44 @@ function App() {
       });
     }
 
+    function handleCardDeleted(payload) {
+      removeCardFromState(payload.cardId);
+
+      if (selectedCardIdRef.current === payload.cardId) {
+        closeCard();
+      }
+    }
+
     function handlePresence(payload) {
       setPresenceUsers(payload.users || []);
     }
 
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
-    socket.on('demo:message', handleMessage);
+    socket.on('board:updated', handleBoardUpdated);
+    socket.on('board:deleted', handleBoardDeleted);
+    socket.on('board:column-created', handleColumnCreated);
+    socket.on('board:column-updated', handleColumnUpdated);
+    socket.on('board:column-deleted', handleColumnDeleted);
     socket.on('board:card-created', handleCardCreated);
     socket.on('board:card-moved', handleCardMoved);
     socket.on('board:card-updated', handleCardUpdated);
+    socket.on('board:card-deleted', handleCardDeleted);
     socket.on('board:comment-created', handleCommentCreated);
     socket.on('board:presence', handlePresence);
 
     return () => {
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
-      socket.off('demo:message', handleMessage);
+      socket.off('board:updated', handleBoardUpdated);
+      socket.off('board:deleted', handleBoardDeleted);
+      socket.off('board:column-created', handleColumnCreated);
+      socket.off('board:column-updated', handleColumnUpdated);
+      socket.off('board:column-deleted', handleColumnDeleted);
       socket.off('board:card-created', handleCardCreated);
       socket.off('board:card-moved', handleCardMoved);
       socket.off('board:card-updated', handleCardUpdated);
+      socket.off('board:card-deleted', handleCardDeleted);
       socket.off('board:comment-created', handleCommentCreated);
       socket.off('board:presence', handlePresence);
       socket.disconnect();
@@ -300,6 +386,17 @@ function App() {
     );
   }
 
+  function removeCardFromState(cardId) {
+    setColumns((currentColumns) =>
+      currentColumns.map((column) => ({
+        ...column,
+        cards: column.cards
+          .filter((card) => card.id !== cardId)
+          .map((card, index) => ({ ...card, position: index }))
+      }))
+    );
+  }
+
   async function loadBoards() {
     setBoardsError('');
     setIsLoadingBoards(true);
@@ -342,6 +439,10 @@ function App() {
 
       setActiveBoard(data.board);
       setColumns(data.columns);
+      setEditingBoardTitle(data.board.title);
+      setColumnDrafts(
+        Object.fromEntries(data.columns.map((column) => [column.id, column.title]))
+      );
       setSelectedCardId('');
       setSelectedCard(null);
       setComments([]);
@@ -395,12 +496,14 @@ function App() {
     setSelectedBoardId('');
     setActiveBoard(null);
     setColumns([]);
+    setEditingBoardTitle('');
+    setNewColumnTitle('');
+    setColumnDrafts({});
     setPresenceUsers([]);
     setCardTitles({});
     setSelectedCardId('');
     setSelectedCard(null);
     setComments([]);
-    setMessages([]);
   }
 
   async function handleCreateBoard(event) {
@@ -463,6 +566,184 @@ function App() {
       setInviteError(error.message);
     } finally {
       setIsCreatingInvite(false);
+    }
+  }
+
+  async function handleUpdateBoard(event) {
+    event.preventDefault();
+    const title = editingBoardTitle.trim();
+
+    if (!selectedBoardId || !title) {
+      return;
+    }
+
+    setBoardError('');
+    setIsSavingBoard(true);
+
+    try {
+      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}`, {
+        method: 'PATCH',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title })
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Could not update board');
+      }
+
+      setActiveBoard(data.board);
+      setBoards((currentBoards) =>
+        currentBoards.map((board) => (board.id === data.board.id ? { ...board, ...data.board } : board))
+      );
+    } catch (error) {
+      setBoardError(error.message);
+    } finally {
+      setIsSavingBoard(false);
+    }
+  }
+
+  async function handleDeleteBoard() {
+    if (!selectedBoardId || !window.confirm('هل تريد حذف هذه اللوحة نهائياً؟')) {
+      return;
+    }
+
+    setBoardError('');
+    setIsDeletingBoard(true);
+
+    try {
+      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Could not delete board');
+      }
+
+      setBoards((currentBoards) => currentBoards.filter((board) => board.id !== selectedBoardId));
+      setSelectedBoardId('');
+      setActiveBoard(null);
+      setColumns([]);
+      setEditingBoardTitle('');
+      setNewColumnTitle('');
+      setColumnDrafts({});
+      closeCard();
+    } catch (error) {
+      setBoardError(error.message);
+    } finally {
+      setIsDeletingBoard(false);
+    }
+  }
+
+  async function handleCreateColumn(event) {
+    event.preventDefault();
+    const title = newColumnTitle.trim();
+
+    if (!selectedBoardId || !title) {
+      return;
+    }
+
+    setBoardError('');
+    setIsCreatingColumn(true);
+
+    try {
+      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}/columns`, {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title })
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Could not create column');
+      }
+
+      setColumns((currentColumns) =>
+        currentColumns.some((column) => column.id === data.column.id)
+          ? currentColumns
+          : [...currentColumns, { ...data.column, cards: [] }]
+      );
+      setColumnDrafts((currentDrafts) => ({ ...currentDrafts, [data.column.id]: data.column.title }));
+      setNewColumnTitle('');
+    } catch (error) {
+      setBoardError(error.message);
+    } finally {
+      setIsCreatingColumn(false);
+    }
+  }
+
+  async function handleUpdateColumn(event, columnId) {
+    event.preventDefault();
+    const title = String(columnDrafts[columnId] || '').trim();
+
+    if (!selectedBoardId || !title) {
+      return;
+    }
+
+    setBoardError('');
+    setSavingColumnId(columnId);
+
+    try {
+      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}/columns/${columnId}`, {
+        method: 'PATCH',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title })
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Could not update column');
+      }
+
+      setColumns((currentColumns) =>
+        currentColumns.map((column) =>
+          column.id === data.column.id ? { ...column, title: data.column.title } : column
+        )
+      );
+    } catch (error) {
+      setBoardError(error.message);
+    } finally {
+      setSavingColumnId('');
+    }
+  }
+
+  async function handleDeleteColumn(columnId) {
+    if (!selectedBoardId || !window.confirm('هل تريد حذف هذا العمود وكل بطاقاته؟')) {
+      return;
+    }
+
+    setBoardError('');
+    setDeletingColumnId(columnId);
+
+    try {
+      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}/columns/${columnId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Could not delete column');
+      }
+
+      setColumns((currentColumns) => currentColumns.filter((column) => column.id !== columnId));
+      setColumnDrafts((currentDrafts) => {
+        const nextDrafts = { ...currentDrafts };
+        delete nextDrafts[columnId];
+        return nextDrafts;
+      });
+      setCardTitles((currentTitles) => {
+        const nextTitles = { ...currentTitles };
+        delete nextTitles[columnId];
+        return nextTitles;
+      });
+      closeCard();
+    } catch (error) {
+      setBoardError(error.message);
+    } finally {
+      setDeletingColumnId('');
     }
   }
 
@@ -666,6 +947,34 @@ function App() {
     }
   }
 
+  async function handleDeleteCard() {
+    if (!selectedBoardId || !selectedCardId || !window.confirm('هل تريد حذف هذه البطاقة؟')) {
+      return;
+    }
+
+    setCardDetailsError('');
+    setIsDeletingCard(true);
+
+    try {
+      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}/cards/${selectedCardId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Could not delete card');
+      }
+
+      removeCardFromState(selectedCardId);
+      closeCard();
+    } catch (error) {
+      setCardDetailsError(error.message);
+    } finally {
+      setIsDeletingCard(false);
+    }
+  }
+
   async function handleAddComment(event) {
     event.preventDefault();
     const body = commentBody.trim();
@@ -700,21 +1009,6 @@ function App() {
     } finally {
       setIsAddingComment(false);
     }
-  }
-
-  function handleMessageSubmit(event) {
-    event.preventDefault();
-    const trimmedText = text.trim();
-
-    if (!trimmedText || !socketRef.current) {
-      return;
-    }
-
-    socketRef.current.emit('demo:message', {
-      author: user?.name || 'Anonymous',
-      text: trimmedText
-    });
-    setText('');
   }
 
   const activeBoardTitle = activeBoard?.title || 'لوحة الكانبان';
@@ -777,30 +1071,6 @@ function App() {
               : 'أنشئ حساباً أو سجّل الدخول للانتقال إلى لوحة التحكم.'}
           </p>
         </div>
-      </section>
-
-      <section className="status-grid" aria-label="Project setup status">
-        <article>
-          <span className="status-icon" aria-hidden="true">OK</span>
-          <div>
-            <h2>React جاهز</h2>
-            <p>واجهة أولية تعمل عبر Vite.</p>
-          </div>
-        </article>
-        <article>
-          <span className="status-icon" aria-hidden="true">API</span>
-          <div>
-            <h2>Express جاهز</h2>
-            <p>API أولي على المسار /api/health.</p>
-          </div>
-        </article>
-        <article>
-          <span className="status-icon" aria-hidden="true">{isConnected ? 'ON' : 'OFF'}</span>
-          <div>
-            <h2>{isConnected ? 'Socket متصل' : 'Socket غير متصل'}</h2>
-            <p>{isConnected ? 'التحديثات الفورية تعمل.' : 'تأكد من تشغيل السيرفر.'}</p>
-          </div>
-        </article>
       </section>
 
       {!user ? (
@@ -973,6 +1243,30 @@ function App() {
               {inviteError ? <p className="form-error">{inviteError}</p> : null}
               {inviteNotice ? <p className="form-success">{inviteNotice}</p> : null}
 
+              <section className="board-tools" aria-label="Board management">
+                <form className="board-edit-form" onSubmit={handleUpdateBoard}>
+                  <label>
+                    اسم اللوحة
+                    <input
+                      value={editingBoardTitle}
+                      onChange={(event) => setEditingBoardTitle(event.target.value)}
+                      placeholder="اسم اللوحة"
+                    />
+                  </label>
+                  <button type="submit" disabled={isSavingBoard || !editingBoardTitle.trim()}>
+                    {isSavingBoard ? 'جاري الحفظ...' : 'حفظ الاسم'}
+                  </button>
+                </form>
+                <button
+                  type="button"
+                  className="danger-button"
+                  onClick={handleDeleteBoard}
+                  disabled={isDeletingBoard}
+                >
+                  {isDeletingBoard ? 'جاري الحذف...' : 'حذف اللوحة'}
+                </button>
+              </section>
+
               <section className="share-panel" aria-label="Invite members">
                 <div>
                   <span className="invite-kicker">مشاركة اللوحة</span>
@@ -998,12 +1292,53 @@ function App() {
                 <p className="empty-state">جاري تحميل اللوحة...</p>
               ) : (
                 <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+                  <form className="add-column-form" onSubmit={handleCreateColumn}>
+                    <input
+                      value={newColumnTitle}
+                      onChange={(event) => setNewColumnTitle(event.target.value)}
+                      placeholder="إضافة عمود جديد"
+                    />
+                    <button type="submit" disabled={isCreatingColumn || !newColumnTitle.trim()}>
+                      {isCreatingColumn ? '...' : 'إضافة عمود'}
+                    </button>
+                  </form>
+
                   <div className="kanban-board">
                     {columns.map((column) => (
                       <DroppableColumn key={column.id} column={column}>
-                        <header>
-                          <h3>{column.title}</h3>
-                          <span>{column.cards.length}</span>
+                        <header className="column-header">
+                          <form className="column-title-form" onSubmit={(event) => handleUpdateColumn(event, column.id)}>
+                            <input
+                              value={columnDrafts[column.id] ?? column.title}
+                              onChange={(event) =>
+                                setColumnDrafts((currentDrafts) => ({
+                                  ...currentDrafts,
+                                  [column.id]: event.target.value
+                                }))
+                              }
+                              aria-label="Column title"
+                            />
+                            <button
+                              type="submit"
+                              className="small-button"
+                              disabled={savingColumnId === column.id || !String(columnDrafts[column.id] || '').trim()}
+                            >
+                              {savingColumnId === column.id ? '...' : 'حفظ'}
+                            </button>
+                          </form>
+                          <div className="column-meta">
+                            <span>{column.cards.length}</span>
+                            <button
+                              type="button"
+                              className="icon-danger-button"
+                              onClick={() => handleDeleteColumn(column.id)}
+                              disabled={deletingColumnId === column.id}
+                              title="حذف العمود"
+                              aria-label="Delete column"
+                            >
+                              ×
+                            </button>
+                          </div>
                         </header>
 
                         <div className="card-list">
@@ -1044,9 +1379,19 @@ function App() {
                       <p className="eyebrow">Card</p>
                       <h3>{selectedCard?.title || 'جاري فتح البطاقة...'}</h3>
                     </div>
-                    <button type="button" className="secondary-button" onClick={closeCard}>
-                      إغلاق
-                    </button>
+                    <div className="details-actions">
+                      <button
+                        type="button"
+                        className="danger-button"
+                        onClick={handleDeleteCard}
+                        disabled={isDeletingCard || isLoadingCardDetails}
+                      >
+                        {isDeletingCard ? 'جاري الحذف...' : 'حذف'}
+                      </button>
+                      <button type="button" className="secondary-button" onClick={closeCard}>
+                        إغلاق
+                      </button>
+                    </div>
                   </div>
 
                   {cardDetailsError ? <p className="form-error">{cardDetailsError}</p> : null}
@@ -1137,43 +1482,6 @@ function App() {
               ) : null}
             </section>
           ) : null}
-
-          <section className="demo-panel" aria-label="Real-time message demo">
-            <div>
-              <h2 className="section-title">اختبار التحديث الفوري</h2>
-              <p className="section-copy">افتح الصفحة في نافذتين، وأرسل رسالة للتأكد أن الاتصال الحي يعمل.</p>
-            </div>
-
-            <form onSubmit={handleMessageSubmit} className="message-form">
-              <label>
-                الرسالة
-                <input
-                  value={text}
-                  onChange={(event) => setText(event.target.value)}
-                  placeholder="اكتب رسالة تجريبية"
-                />
-              </label>
-              <button type="submit" disabled={!isConnected}>
-                إرسال
-              </button>
-            </form>
-
-            <div className="messages">
-              {messages.length === 0 ? (
-                <p className="empty-state">لا توجد رسائل بعد.</p>
-              ) : (
-                messages.map((message) => (
-                  <article key={message.id} className="message">
-                    <strong>{message.author}</strong>
-                    <p>{message.text}</p>
-                    <time dateTime={message.createdAt}>
-                      {new Date(message.createdAt).toLocaleTimeString('ar')}
-                    </time>
-                  </article>
-                ))
-              )}
-            </div>
-          </section>
         </>
       )}
     </main>

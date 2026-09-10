@@ -237,6 +237,47 @@ app.post('/api/boards', requireAuth, (req, res) => {
   res.status(201).json({ board: createdBoard });
 });
 
+app.patch('/api/boards/:boardId', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+
+  if (!board) {
+    return res.status(404).json({ message: 'Board not found' });
+  }
+
+  const title = String(req.body.title || '').trim();
+
+  if (!title) {
+    return res.status(400).json({ message: 'Board title is required' });
+  }
+
+  db.prepare('UPDATE boards SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    .run(title, board.id);
+
+  const updatedBoard = getBoardForUser(board.id, req.user.id);
+
+  io.to(`board:${board.id}`).emit('board:updated', {
+    board: updatedBoard
+  });
+
+  res.json({ board: updatedBoard });
+});
+
+app.delete('/api/boards/:boardId', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+
+  if (!board) {
+    return res.status(404).json({ message: 'Board not found' });
+  }
+
+  db.prepare('DELETE FROM boards WHERE id = ?').run(board.id);
+
+  io.to(`board:${board.id}`).emit('board:deleted', {
+    boardId: board.id
+  });
+
+  res.status(204).end();
+});
+
 app.post('/api/boards/:boardId/invites', requireAuth, (req, res) => {
   const board = getBoardForUser(req.params.boardId, req.user.id);
 
@@ -371,6 +412,121 @@ app.get('/api/boards/:boardId', requireAuth, (req, res) => {
     board,
     columns: columnsWithCards
   });
+});
+
+app.post('/api/boards/:boardId/columns', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+
+  if (!board) {
+    return res.status(404).json({ message: 'Board not found' });
+  }
+
+  const title = String(req.body.title || '').trim();
+
+  if (!title) {
+    return res.status(400).json({ message: 'Column title is required' });
+  }
+
+  const position =
+    db
+      .prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM board_columns WHERE board_id = ?')
+      .get(board.id).position || 0;
+  const columnId = randomUUID();
+
+  db.prepare('INSERT INTO board_columns (id, board_id, title, position) VALUES (?, ?, ?, ?)')
+    .run(columnId, board.id, title, position);
+  db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+
+  const column = db
+    .prepare(`
+      SELECT id, title, position, created_at AS createdAt, updated_at AS updatedAt
+      FROM board_columns
+      WHERE id = ?
+    `)
+    .get(columnId);
+  const columnWithCards = { ...column, cards: [] };
+
+  io.to(`board:${board.id}`).emit('board:column-created', {
+    boardId: board.id,
+    column: columnWithCards
+  });
+
+  res.status(201).json({ column: columnWithCards });
+});
+
+app.patch('/api/boards/:boardId/columns/:columnId', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+
+  if (!board) {
+    return res.status(404).json({ message: 'Board not found' });
+  }
+
+  const column = db
+    .prepare('SELECT id FROM board_columns WHERE id = ? AND board_id = ?')
+    .get(req.params.columnId, board.id);
+
+  if (!column) {
+    return res.status(404).json({ message: 'Column not found' });
+  }
+
+  const title = String(req.body.title || '').trim();
+
+  if (!title) {
+    return res.status(400).json({ message: 'Column title is required' });
+  }
+
+  db.prepare('UPDATE board_columns SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    .run(title, column.id);
+  db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+
+  const updatedColumn = db
+    .prepare(`
+      SELECT id, title, position, created_at AS createdAt, updated_at AS updatedAt
+      FROM board_columns
+      WHERE id = ?
+    `)
+    .get(column.id);
+
+  io.to(`board:${board.id}`).emit('board:column-updated', {
+    boardId: board.id,
+    column: updatedColumn
+  });
+
+  res.json({ column: updatedColumn });
+});
+
+app.delete('/api/boards/:boardId/columns/:columnId', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+
+  if (!board) {
+    return res.status(404).json({ message: 'Board not found' });
+  }
+
+  const column = db
+    .prepare('SELECT id FROM board_columns WHERE id = ? AND board_id = ?')
+    .get(req.params.columnId, board.id);
+
+  if (!column) {
+    return res.status(404).json({ message: 'Column not found' });
+  }
+
+  db.prepare('DELETE FROM board_columns WHERE id = ?').run(column.id);
+  db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+
+  const remainingColumns = db
+    .prepare('SELECT id FROM board_columns WHERE board_id = ? ORDER BY position ASC')
+    .all(board.id);
+  const updatePosition = db.prepare('UPDATE board_columns SET position = ? WHERE id = ?');
+  remainingColumns.forEach((remainingColumn, index) => {
+    updatePosition.run(index, remainingColumn.id);
+  });
+
+  io.to(`board:${board.id}`).emit('board:column-deleted', {
+    boardId: board.id,
+    columnId: column.id
+  });
+
+  res.status(204).end();
 });
 
 app.post('/api/boards/:boardId/columns/:columnId/cards', requireAuth, (req, res) => {
@@ -634,6 +790,49 @@ app.post('/api/boards/:boardId/cards/:cardId/comments', requireAuth, (req, res) 
   });
 
   res.status(201).json({ comment });
+});
+
+app.delete('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+
+  if (!board) {
+    return res.status(404).json({ message: 'Board not found' });
+  }
+
+  const card = getCardForBoard(req.params.cardId, board.id);
+
+  if (!card) {
+    return res.status(404).json({ message: 'Card not found' });
+  }
+
+  db.prepare(`
+    UPDATE cards
+    SET deleted_at = CURRENT_TIMESTAMP, version = version + 1, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(card.id);
+  db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+
+  const sourceCards = db
+    .prepare(`
+      SELECT id
+      FROM cards
+      WHERE column_id = ?
+        AND deleted_at IS NULL
+      ORDER BY position ASC, created_at ASC
+    `)
+    .all(card.columnId);
+  const updatePosition = db.prepare('UPDATE cards SET position = ? WHERE id = ?');
+  sourceCards.forEach((sourceCard, index) => {
+    updatePosition.run(index, sourceCard.id);
+  });
+
+  io.to(`board:${board.id}`).emit('board:card-deleted', {
+    boardId: board.id,
+    cardId: card.id,
+    columnId: card.columnId
+  });
+
+  res.status(204).end();
 });
 
 io.on('connection', (socket) => {
