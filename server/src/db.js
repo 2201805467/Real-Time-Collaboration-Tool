@@ -42,6 +42,17 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS board_invites (
+    id TEXT PRIMARY KEY,
+    board_id TEXT NOT NULL,
+    token TEXT NOT NULL UNIQUE,
+    created_by TEXT NOT NULL,
+    expires_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+  );
+
   CREATE TABLE IF NOT EXISTS board_columns (
     id TEXT PRIMARY KEY,
     board_id TEXT NOT NULL,
@@ -93,6 +104,7 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_boards_owner_id ON boards(owner_id);
+  CREATE INDEX IF NOT EXISTS idx_board_invites_token ON board_invites(token);
   CREATE INDEX IF NOT EXISTS idx_board_columns_board_id ON board_columns(board_id);
   CREATE INDEX IF NOT EXISTS idx_cards_column_id ON cards(column_id);
   CREATE INDEX IF NOT EXISTS idx_comments_card_id ON comments(card_id);

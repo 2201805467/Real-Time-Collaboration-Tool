@@ -56,6 +56,13 @@ function App() {
   const [boardsError, setBoardsError] = useState('');
   const [isLoadingBoards, setIsLoadingBoards] = useState(false);
   const [isCreatingBoard, setIsCreatingBoard] = useState(false);
+  const [inviteToken, setInviteToken] = useState(() => new URLSearchParams(window.location.search).get('invite') || '');
+  const [inviteInfo, setInviteInfo] = useState(null);
+  const [inviteLink, setInviteLink] = useState('');
+  const [inviteError, setInviteError] = useState('');
+  const [inviteNotice, setInviteNotice] = useState('');
+  const [isCreatingInvite, setIsCreatingInvite] = useState(false);
+  const [isAcceptingInvite, setIsAcceptingInvite] = useState(false);
   const [selectedBoardId, setSelectedBoardId] = useState('');
   const [activeBoard, setActiveBoard] = useState(null);
   const [columns, setColumns] = useState([]);
@@ -108,6 +115,27 @@ function App() {
       loadBoards();
     }
   }, [user, token]);
+
+  useEffect(() => {
+    if (!inviteToken) {
+      return;
+    }
+
+    setInviteError('');
+
+    fetch(`${apiUrl}/api/invites/${inviteToken}`)
+      .then((response) =>
+        response.json().then((data) => {
+          if (!response.ok) {
+            throw new Error(data.message || 'Could not load invite');
+          }
+
+          return data;
+        })
+      )
+      .then((data) => setInviteInfo(data.invite))
+      .catch((error) => setInviteError(error.message));
+  }, [inviteToken]);
 
   useEffect(() => {
     const socket = io(socketUrl);
@@ -408,6 +436,87 @@ function App() {
     }
   }
 
+  async function handleCreateInvite() {
+    if (!selectedBoardId) {
+      return;
+    }
+
+    setInviteError('');
+    setInviteNotice('');
+    setIsCreatingInvite(true);
+
+    try {
+      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}/invites`, {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Could not create invite');
+      }
+
+      const nextInviteLink = `${window.location.origin}${window.location.pathname}?invite=${data.invite.token}`;
+      setInviteLink(nextInviteLink);
+      setInviteNotice('تم إنشاء رابط الدعوة. صالح لمدة 7 أيام.');
+    } catch (error) {
+      setInviteError(error.message);
+    } finally {
+      setIsCreatingInvite(false);
+    }
+  }
+
+  async function handleCopyInvite() {
+    if (!inviteLink) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setInviteNotice('تم نسخ رابط الدعوة.');
+    } catch {
+      setInviteNotice('انسخ الرابط يدوياً من الحقل.');
+    }
+  }
+
+  async function handleAcceptInvite() {
+    if (!inviteToken || !token) {
+      setInviteNotice('سجّل الدخول أولاً ثم اقبل الدعوة.');
+      return;
+    }
+
+    setInviteError('');
+    setInviteNotice('');
+    setIsAcceptingInvite(true);
+
+    try {
+      const response = await fetch(`${apiUrl}/api/invites/${inviteToken}/accept`, {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Could not accept invite');
+      }
+
+      setBoards((currentBoards) =>
+        currentBoards.some((board) => board.id === data.board.id)
+          ? currentBoards
+          : [data.board, ...currentBoards]
+      );
+      setInviteNotice('تم الانضمام للوحة بنجاح.');
+      window.history.replaceState({}, '', window.location.pathname);
+      setInviteToken('');
+      setInviteInfo(null);
+      openBoard(data.board.id);
+    } catch (error) {
+      setInviteError(error.message);
+    } finally {
+      setIsAcceptingInvite(false);
+    }
+  }
+
   async function handleCreateCard(event, columnId) {
     event.preventDefault();
     const title = String(cardTitles[columnId] || '').trim();
@@ -649,7 +758,9 @@ function App() {
             <div className="topbar-actions">
               <span className={isConnected ? 'live-pill online' : 'live-pill'}>مزامنة فورية</span>
               <button type="button" className="secondary-button">تصفية</button>
-              <button type="button" className="secondary-button">مشاركة</button>
+              <button type="button" className="secondary-button" onClick={handleCreateInvite} disabled={!selectedBoardId}>
+                مشاركة
+              </button>
             </div>
           </header>
         </>
@@ -693,6 +804,21 @@ function App() {
       </section>
 
       {!user ? (
+        <>
+        {inviteToken ? (
+          <section className="invite-panel" aria-label="Board invitation">
+            <span className="invite-kicker">دعوة لوحة عمل</span>
+            <h2>{inviteInfo ? inviteInfo.boardTitle : 'جاري تحميل الدعوة...'}</h2>
+            <p>
+              {inviteInfo
+                ? `${inviteInfo.inviterName} دعاك للانضمام لهذه اللوحة. سجّل الدخول أو أنشئ حساباً ثم اقبل الدعوة.`
+                : 'نجهّز تفاصيل الدعوة.'}
+            </p>
+            {inviteError ? <p className="form-error">{inviteError}</p> : null}
+            {inviteNotice ? <p className="form-success">{inviteNotice}</p> : null}
+          </section>
+        ) : null}
+
         <section className="demo-panel auth-panel" aria-label="Authentication form">
           <div className="auth-tabs" role="tablist" aria-label="Authentication mode">
             <button
@@ -749,8 +875,26 @@ function App() {
             </button>
           </form>
         </section>
+        </>
       ) : (
         <>
+          {inviteToken ? (
+            <section className="invite-panel" aria-label="Board invitation">
+              <span className="invite-kicker">دعوة لوحة عمل</span>
+              <h2>{inviteInfo ? inviteInfo.boardTitle : 'جاري تحميل الدعوة...'}</h2>
+              <p>
+                {inviteInfo
+                  ? `${inviteInfo.inviterName} دعاك للانضمام لهذه اللوحة.`
+                  : 'نجهّز تفاصيل الدعوة.'}
+              </p>
+              {inviteError ? <p className="form-error">{inviteError}</p> : null}
+              {inviteNotice ? <p className="form-success">{inviteNotice}</p> : null}
+              <button type="button" onClick={handleAcceptInvite} disabled={isAcceptingInvite || !inviteInfo}>
+                {isAcceptingInvite ? 'جاري الانضمام...' : 'قبول الدعوة'}
+              </button>
+            </section>
+          ) : null}
+
           <section className="dashboard-panel" aria-label="Boards dashboard">
             <div className="session-bar">
               <div>
@@ -826,6 +970,29 @@ function App() {
               </div>
 
               {boardError ? <p className="form-error">{boardError}</p> : null}
+              {inviteError ? <p className="form-error">{inviteError}</p> : null}
+              {inviteNotice ? <p className="form-success">{inviteNotice}</p> : null}
+
+              <section className="share-panel" aria-label="Invite members">
+                <div>
+                  <span className="invite-kicker">مشاركة اللوحة</span>
+                  <h3>دعوة عضو برابط مباشر</h3>
+                  <p>أنشئ رابطاً صالحاً لمدة 7 أيام، وأرسله لأي زميل لينضم لهذه اللوحة.</p>
+                </div>
+                <div className="share-actions">
+                  <button type="button" onClick={handleCreateInvite} disabled={isCreatingInvite}>
+                    {isCreatingInvite ? 'جاري الإنشاء...' : 'إنشاء رابط دعوة'}
+                  </button>
+                  {inviteLink ? (
+                    <>
+                      <input readOnly value={inviteLink} aria-label="Invite link" />
+                      <button type="button" className="secondary-button" onClick={handleCopyInvite}>
+                        نسخ الرابط
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              </section>
 
               {isLoadingBoard ? (
                 <p className="empty-state">جاري تحميل اللوحة...</p>

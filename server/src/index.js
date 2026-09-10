@@ -237,6 +237,93 @@ app.post('/api/boards', requireAuth, (req, res) => {
   res.status(201).json({ board: createdBoard });
 });
 
+app.post('/api/boards/:boardId/invites', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+
+  if (!board) {
+    return res.status(404).json({ message: 'Board not found' });
+  }
+
+  const inviteId = randomUUID();
+  const token = randomUUID().replaceAll('-', '');
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  db.prepare(`
+    INSERT INTO board_invites (id, board_id, token, created_by, expires_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(inviteId, board.id, token, req.user.id, expiresAt);
+
+  res.status(201).json({
+    invite: {
+      id: inviteId,
+      boardId: board.id,
+      token,
+      expiresAt
+    }
+  });
+});
+
+app.get('/api/invites/:token', (req, res) => {
+  const invite = db
+    .prepare(`
+      SELECT
+        board_invites.id,
+        board_invites.board_id AS boardId,
+        board_invites.token,
+        board_invites.expires_at AS expiresAt,
+        boards.title AS boardTitle,
+        users.name AS inviterName
+      FROM board_invites
+      INNER JOIN boards ON boards.id = board_invites.board_id
+      INNER JOIN users ON users.id = board_invites.created_by
+      WHERE board_invites.token = ?
+    `)
+    .get(req.params.token);
+
+  if (!invite) {
+    return res.status(404).json({ message: 'Invite not found' });
+  }
+
+  if (invite.expiresAt && new Date(invite.expiresAt).getTime() < Date.now()) {
+    return res.status(410).json({ message: 'Invite has expired' });
+  }
+
+  res.json({ invite });
+});
+
+app.post('/api/invites/:token/accept', requireAuth, (req, res) => {
+  const invite = db
+    .prepare(`
+      SELECT board_invites.board_id AS boardId, board_invites.expires_at AS expiresAt
+      FROM board_invites
+      WHERE board_invites.token = ?
+    `)
+    .get(req.params.token);
+
+  if (!invite) {
+    return res.status(404).json({ message: 'Invite not found' });
+  }
+
+  if (invite.expiresAt && new Date(invite.expiresAt).getTime() < Date.now()) {
+    return res.status(410).json({ message: 'Invite has expired' });
+  }
+
+  db.prepare(`
+    INSERT OR IGNORE INTO board_members (board_id, user_id, role)
+    VALUES (?, ?, ?)
+  `).run(invite.boardId, req.user.id, 'member');
+
+  const board = db
+    .prepare(`
+      SELECT id, title, created_at AS createdAt, updated_at AS updatedAt
+      FROM boards
+      WHERE id = ?
+    `)
+    .get(invite.boardId);
+
+  res.json({ board });
+});
+
 app.get('/api/boards/:boardId', requireAuth, (req, res) => {
   const board = getBoardForUser(req.params.boardId, req.user.id);
 

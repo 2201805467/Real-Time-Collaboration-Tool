@@ -284,6 +284,52 @@ button:disabled {
   line-height: 1.5;
 }
 
+.form-success {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid #b7ebcd;
+  border-radius: 8px;
+  color: #0f5c2f;
+  background: #eefbf3;
+  line-height: 1.5;
+}
+
+.invite-panel,
+.share-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #d9e1e5;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.invite-kicker {
+  color: #40616c;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.invite-panel h2,
+.share-panel h3 {
+  margin: 0;
+  color: #17202a;
+}
+
+.invite-panel p,
+.share-panel p {
+  margin: 0;
+  color: #687781;
+  line-height: 1.6;
+}
+
+.share-actions {
+  display: grid;
+  grid-template-columns: auto minmax(220px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
 .session-bar {
   display: flex;
   gap: 14px;
@@ -781,6 +827,8 @@ button:disabled {
 
 .workspace-shell .status-grid article,
 .workspace-shell .dashboard-panel,
+.workspace-shell .invite-panel,
+.workspace-shell .share-panel,
 .workspace-shell .demo-panel,
 .workspace-shell .card-details {
   border-color: #d9def4;
@@ -788,6 +836,26 @@ button:disabled {
   background: rgb(255 255 255 / 0.78);
   box-shadow: 0 12px 32px rgb(19 27 46 / 0.07);
   backdrop-filter: blur(16px);
+}
+
+.workspace-shell .invite-panel {
+  max-width: 1120px;
+  border-color: #c3c0ff;
+  background: linear-gradient(135deg, rgb(226 223 255 / 0.9), rgb(255 255 255 / 0.82));
+}
+
+.workspace-shell .share-panel {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 1.2fr);
+  border-color: #d9def4;
+  background: rgb(250 248 255 / 0.78);
+}
+
+.workspace-shell .share-panel h3 {
+  color: #131b2e;
+}
+
+.workspace-shell .invite-kicker {
+  color: #3525cd;
 }
 
 .workspace-shell .board-panel {
@@ -903,5 +971,10 @@ button:disabled {
 
   .topbar-actions {
     overflow-x: auto;
+  }
+
+  .share-actions,
+  .workspace-shell .share-panel {
+    grid-template-columns: 1fr;
   }
 }
