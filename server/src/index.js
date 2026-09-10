@@ -3,6 +3,7 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { randomUUID } from 'crypto';
 import { Server } from 'socket.io';
+import { getDatabaseSummary } from './db.js';
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -21,8 +22,13 @@ app.use(express.json());
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    service: 'collab-tool-server'
+    service: 'collab-tool-server',
+    database: 'connected'
   });
+});
+
+app.get('/api/db/summary', (req, res) => {
+  res.json(getDatabaseSummary());
 });
 
 io.on('connection', (socket) => {
