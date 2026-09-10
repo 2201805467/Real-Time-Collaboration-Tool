@@ -1,10 +1,45 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
 import { io } from 'socket.io-client';
 
 const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:4000';
 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
+function DroppableColumn({ column, children }) {
+  const { isOver, setNodeRef } = useDroppable({ id: column.id });
+
+  return (
+    <section ref={setNodeRef} className={isOver ? 'kanban-column over' : 'kanban-column'}>
+      {children}
+    </section>
+  );
+}
+
+function DraggableCard({ card }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: card.id
+  });
+  const style = {
+    transform: CSS.Translate.toString(transform)
+  };
+
+  return (
+    <article
+      ref={setNodeRef}
+      className={isDragging ? 'task-card dragging' : 'task-card'}
+      style={style}
+      {...listeners}
+      {...attributes}
+    >
+      <h4>{card.title}</h4>
+      {card.description ? <p>{card.description}</p> : null}
+    </article>
+  );
+}
+
 function App() {
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const socketRef = useRef(null);
   const [isConnected, setIsConnected] = useState(false);
   const [authMode, setAuthMode] = useState('login');
@@ -93,16 +128,22 @@ function App() {
       );
     }
 
+    function handleCardMoved(payload) {
+      moveCardInState(payload.card.id, payload.targetColumnId, payload.position, payload.card);
+    }
+
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
     socket.on('demo:message', handleMessage);
     socket.on('board:card-created', handleCardCreated);
+    socket.on('board:card-moved', handleCardMoved);
 
     return () => {
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
       socket.off('demo:message', handleMessage);
       socket.off('board:card-created', handleCardCreated);
+      socket.off('board:card-moved', handleCardMoved);
       socket.disconnect();
       socketRef.current = null;
     };
@@ -126,6 +167,43 @@ function App() {
 
   function getAuthHeaders() {
     return { Authorization: `Bearer ${token}` };
+  }
+
+  function moveCardInState(cardId, targetColumnId, targetPosition, updatedCard) {
+    setColumns((currentColumns) => {
+      let movedCard = updatedCard || null;
+      const columnsWithoutCard = currentColumns.map((column) => {
+        const remainingCards = column.cards.filter((card) => {
+          if (card.id === cardId) {
+            movedCard = updatedCard || { ...card, columnId: targetColumnId };
+            return false;
+          }
+
+          return true;
+        });
+
+        return { ...column, cards: remainingCards };
+      });
+
+      if (!movedCard) {
+        return currentColumns;
+      }
+
+      return columnsWithoutCard.map((column) => {
+        if (column.id !== targetColumnId) {
+          return column;
+        }
+
+        const nextCards = [...column.cards];
+        const insertAt = Math.max(0, Math.min(targetPosition, nextCards.length));
+        nextCards.splice(insertAt, 0, { ...movedCard, columnId: targetColumnId });
+
+        return {
+          ...column,
+          cards: nextCards.map((card, index) => ({ ...card, position: index }))
+        };
+      });
+    });
   }
 
   async function loadBoards() {
@@ -292,6 +370,45 @@ function App() {
       setBoardError(error.message);
     } finally {
       setIsCreatingCard('');
+    }
+  }
+
+  async function handleDragEnd(event) {
+    const { active, over } = event;
+
+    if (!active || !over || !selectedBoardId) {
+      return;
+    }
+
+    const cardId = active.id;
+    const targetColumnId = over.id;
+    const sourceColumn = columns.find((column) => column.cards.some((card) => card.id === cardId));
+    const targetColumn = columns.find((column) => column.id === targetColumnId);
+
+    if (!sourceColumn || !targetColumn || sourceColumn.id === targetColumnId) {
+      return;
+    }
+
+    const targetPosition = targetColumn.cards.length;
+    moveCardInState(cardId, targetColumnId, targetPosition);
+
+    try {
+      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}/cards/${cardId}/move`, {
+        method: 'PATCH',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          columnId: targetColumnId,
+          position: targetPosition
+        })
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Could not move card');
+      }
+    } catch (error) {
+      setBoardError(error.message);
+      openBoard(selectedBoardId);
     }
   }
 
@@ -473,45 +590,42 @@ function App() {
               {isLoadingBoard ? (
                 <p className="empty-state">جاري تحميل اللوحة...</p>
               ) : (
-                <div className="kanban-board">
-                  {columns.map((column) => (
-                    <section key={column.id} className="kanban-column">
-                      <header>
-                        <h3>{column.title}</h3>
-                        <span>{column.cards.length}</span>
-                      </header>
+                <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+                  <div className="kanban-board">
+                    {columns.map((column) => (
+                      <DroppableColumn key={column.id} column={column}>
+                        <header>
+                          <h3>{column.title}</h3>
+                          <span>{column.cards.length}</span>
+                        </header>
 
-                      <div className="card-list">
-                        {column.cards.length === 0 ? (
-                          <p className="column-empty">لا توجد بطاقات.</p>
-                        ) : (
-                          column.cards.map((card) => (
-                            <article key={card.id} className="task-card">
-                              <h4>{card.title}</h4>
-                              {card.description ? <p>{card.description}</p> : null}
-                            </article>
-                          ))
-                        )}
-                      </div>
+                        <div className="card-list">
+                          {column.cards.length === 0 ? (
+                            <p className="column-empty">اسحب بطاقة إلى هنا.</p>
+                          ) : (
+                            column.cards.map((card) => <DraggableCard key={card.id} card={card} />)
+                          )}
+                        </div>
 
-                      <form className="card-form" onSubmit={(event) => handleCreateCard(event, column.id)}>
-                        <input
-                          value={cardTitles[column.id] || ''}
-                          onChange={(event) =>
-                            setCardTitles((currentTitles) => ({
-                              ...currentTitles,
-                              [column.id]: event.target.value
-                            }))
-                          }
-                          placeholder="إضافة بطاقة"
-                        />
-                        <button type="submit" disabled={isCreatingCard === column.id}>
-                          {isCreatingCard === column.id ? '...' : 'إضافة'}
-                        </button>
-                      </form>
-                    </section>
-                  ))}
-                </div>
+                        <form className="card-form" onSubmit={(event) => handleCreateCard(event, column.id)}>
+                          <input
+                            value={cardTitles[column.id] || ''}
+                            onChange={(event) =>
+                              setCardTitles((currentTitles) => ({
+                                ...currentTitles,
+                                [column.id]: event.target.value
+                              }))
+                            }
+                            placeholder="إضافة بطاقة"
+                          />
+                          <button type="submit" disabled={isCreatingCard === column.id}>
+                            {isCreatingCard === column.id ? '...' : 'إضافة'}
+                          </button>
+                        </form>
+                      </DroppableColumn>
+                    ))}
+                  </div>
+                </DndContext>
               )}
             </section>
           ) : null}

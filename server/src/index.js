@@ -268,6 +268,117 @@ app.post('/api/boards/:boardId/columns/:columnId/cards', requireAuth, (req, res)
   res.status(201).json({ card });
 });
 
+app.patch('/api/boards/:boardId/cards/:cardId/move', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+
+  if (!board) {
+    return res.status(404).json({ message: 'Board not found' });
+  }
+
+  const targetColumnId = String(req.body.columnId || '');
+  const requestedPosition = Number(req.body.position);
+  const targetColumn = db
+    .prepare('SELECT id FROM board_columns WHERE id = ? AND board_id = ?')
+    .get(targetColumnId, board.id);
+
+  if (!targetColumn || Number.isNaN(requestedPosition)) {
+    return res.status(400).json({ message: 'Valid target column and position are required' });
+  }
+
+  const card = db
+    .prepare(`
+      SELECT cards.id, cards.column_id AS columnId
+      FROM cards
+      INNER JOIN board_columns ON board_columns.id = cards.column_id
+      WHERE cards.id = ?
+        AND board_columns.board_id = ?
+        AND cards.deleted_at IS NULL
+    `)
+    .get(req.params.cardId, board.id);
+
+  if (!card) {
+    return res.status(404).json({ message: 'Card not found' });
+  }
+
+  const siblingCards = db
+    .prepare(`
+      SELECT id
+      FROM cards
+      WHERE column_id = ?
+        AND id != ?
+        AND deleted_at IS NULL
+      ORDER BY position ASC, created_at ASC
+    `)
+    .all(targetColumn.id, card.id);
+  const insertAt = Math.max(0, Math.min(requestedPosition, siblingCards.length));
+  const orderedCardIds = siblingCards.map((siblingCard) => siblingCard.id);
+
+  orderedCardIds.splice(insertAt, 0, card.id);
+
+  try {
+    db.exec('BEGIN');
+    db.prepare(`
+      UPDATE cards
+      SET column_id = ?, position = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(targetColumn.id, insertAt, card.id);
+
+    const updatePosition = db.prepare('UPDATE cards SET position = ? WHERE id = ?');
+    orderedCardIds.forEach((cardId, index) => {
+      updatePosition.run(index, cardId);
+    });
+
+    if (card.columnId !== targetColumn.id) {
+      const sourceCards = db
+        .prepare(`
+          SELECT id
+          FROM cards
+          WHERE column_id = ?
+            AND deleted_at IS NULL
+          ORDER BY position ASC, created_at ASC
+        `)
+        .all(card.columnId);
+      sourceCards.forEach((sourceCard, index) => {
+        updatePosition.run(index, sourceCard.id);
+      });
+    }
+
+    db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+
+  const movedCard = db
+    .prepare(`
+      SELECT
+        id,
+        column_id AS columnId,
+        title,
+        description,
+        assignee_id AS assigneeId,
+        due_date AS dueDate,
+        position,
+        version,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM cards
+      WHERE id = ?
+    `)
+    .get(card.id);
+
+  io.to(`board:${board.id}`).emit('board:card-moved', {
+    boardId: board.id,
+    card: movedCard,
+    sourceColumnId: card.columnId,
+    targetColumnId: targetColumn.id,
+    position: insertAt
+  });
+
+  res.json({ card: movedCard });
+});
+
 io.on('connection', (socket) => {
   console.log(`Socket connected: ${socket.id}`);
 
