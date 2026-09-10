@@ -8,15 +8,23 @@ function App() {
   const socketRef = useRef(null);
   const [isConnected, setIsConnected] = useState(false);
   const [authMode, setAuthMode] = useState('login');
-  const [authForm, setAuthForm] = useState({
-    name: '',
-    email: '',
-    password: ''
-  });
+  const [authForm, setAuthForm] = useState({ name: '', email: '', password: '' });
   const [authError, setAuthError] = useState('');
   const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
   const [token, setToken] = useState(() => localStorage.getItem('collab-token') || '');
   const [user, setUser] = useState(null);
+  const [boards, setBoards] = useState([]);
+  const [boardTitle, setBoardTitle] = useState('');
+  const [boardsError, setBoardsError] = useState('');
+  const [isLoadingBoards, setIsLoadingBoards] = useState(false);
+  const [isCreatingBoard, setIsCreatingBoard] = useState(false);
+  const [selectedBoardId, setSelectedBoardId] = useState('');
+  const [activeBoard, setActiveBoard] = useState(null);
+  const [columns, setColumns] = useState([]);
+  const [boardError, setBoardError] = useState('');
+  const [isLoadingBoard, setIsLoadingBoard] = useState(false);
+  const [cardTitles, setCardTitles] = useState({});
+  const [isCreatingCard, setIsCreatingCard] = useState('');
   const [text, setText] = useState('');
   const [messages, setMessages] = useState([]);
 
@@ -26,9 +34,7 @@ function App() {
     }
 
     fetch(`${apiUrl}/api/auth/me`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+      headers: { Authorization: `Bearer ${token}` }
     })
       .then((response) => {
         if (!response.ok) {
@@ -42,8 +48,18 @@ function App() {
         localStorage.removeItem('collab-token');
         setToken('');
         setUser(null);
+        setBoards([]);
+        setSelectedBoardId('');
+        setActiveBoard(null);
+        setColumns([]);
       });
   }, [token]);
+
+  useEffect(() => {
+    if (user && token) {
+      loadBoards();
+    }
+  }, [user, token]);
 
   useEffect(() => {
     const socket = io(socketUrl);
@@ -61,24 +77,103 @@ function App() {
       setMessages((currentMessages) => [message, ...currentMessages]);
     }
 
+    function handleCardCreated(payload) {
+      setColumns((currentColumns) =>
+        currentColumns.map((column) => {
+          if (column.id !== payload.columnId) {
+            return column;
+          }
+
+          if (column.cards.some((card) => card.id === payload.card.id)) {
+            return column;
+          }
+
+          return { ...column, cards: [...column.cards, payload.card] };
+        })
+      );
+    }
+
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
     socket.on('demo:message', handleMessage);
+    socket.on('board:card-created', handleCardCreated);
 
     return () => {
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
       socket.off('demo:message', handleMessage);
+      socket.off('board:card-created', handleCardCreated);
       socket.disconnect();
       socketRef.current = null;
     };
   }, []);
 
+  useEffect(() => {
+    if (!selectedBoardId || !socketRef.current) {
+      return;
+    }
+
+    socketRef.current.emit('board:join', selectedBoardId);
+
+    return () => {
+      socketRef.current?.emit('board:leave', selectedBoardId);
+    };
+  }, [selectedBoardId]);
+
   function updateAuthForm(field, value) {
-    setAuthForm((currentForm) => ({
-      ...currentForm,
-      [field]: value
-    }));
+    setAuthForm((currentForm) => ({ ...currentForm, [field]: value }));
+  }
+
+  function getAuthHeaders() {
+    return { Authorization: `Bearer ${token}` };
+  }
+
+  async function loadBoards() {
+    setBoardsError('');
+    setIsLoadingBoards(true);
+
+    try {
+      const response = await fetch(`${apiUrl}/api/boards`, {
+        headers: getAuthHeaders()
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Could not load boards');
+      }
+
+      setBoards(data.boards);
+    } catch (error) {
+      setBoardsError(error.message);
+    } finally {
+      setIsLoadingBoards(false);
+    }
+  }
+
+  async function openBoard(boardId) {
+    setSelectedBoardId(boardId);
+    setActiveBoard(null);
+    setColumns([]);
+    setBoardError('');
+    setIsLoadingBoard(true);
+
+    try {
+      const response = await fetch(`${apiUrl}/api/boards/${boardId}`, {
+        headers: getAuthHeaders()
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Could not load board');
+      }
+
+      setActiveBoard(data.board);
+      setColumns(data.columns);
+    } catch (error) {
+      setBoardError(error.message);
+    } finally {
+      setIsLoadingBoard(false);
+    }
   }
 
   async function handleAuthSubmit(event) {
@@ -87,20 +182,14 @@ function App() {
     setIsSubmittingAuth(true);
 
     const endpoint = authMode === 'register' ? 'register' : 'login';
-    const body =
-      authMode === 'register'
-        ? authForm
-        : {
-            email: authForm.email,
-            password: authForm.password
-          };
+    const body = authMode === 'register'
+      ? authForm
+      : { email: authForm.email, password: authForm.password };
 
     try {
       const response = await fetch(`${apiUrl}/api/auth/${endpoint}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
       const data = await response.json();
@@ -112,11 +201,7 @@ function App() {
       localStorage.setItem('collab-token', data.token);
       setToken(data.token);
       setUser(data.user);
-      setAuthForm({
-        name: '',
-        email: '',
-        password: ''
-      });
+      setAuthForm({ name: '', email: '', password: '' });
     } catch (error) {
       setAuthError(error.message);
     } finally {
@@ -128,19 +213,93 @@ function App() {
     localStorage.removeItem('collab-token');
     setToken('');
     setUser(null);
+    setBoards([]);
+    setBoardTitle('');
+    setSelectedBoardId('');
+    setActiveBoard(null);
+    setColumns([]);
+    setCardTitles({});
     setMessages([]);
+  }
+
+  async function handleCreateBoard(event) {
+    event.preventDefault();
+    const title = boardTitle.trim();
+
+    if (!title) {
+      return;
+    }
+
+    setBoardsError('');
+    setIsCreatingBoard(true);
+
+    try {
+      const response = await fetch(`${apiUrl}/api/boards`, {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title })
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Could not create board');
+      }
+
+      setBoards((currentBoards) => [data.board, ...currentBoards]);
+      setBoardTitle('');
+      openBoard(data.board.id);
+    } catch (error) {
+      setBoardsError(error.message);
+    } finally {
+      setIsCreatingBoard(false);
+    }
+  }
+
+  async function handleCreateCard(event, columnId) {
+    event.preventDefault();
+    const title = String(cardTitles[columnId] || '').trim();
+
+    if (!title) {
+      return;
+    }
+
+    setBoardError('');
+    setIsCreatingCard(columnId);
+
+    try {
+      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}/columns/${columnId}/cards`, {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title })
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Could not create card');
+      }
+
+      setColumns((currentColumns) =>
+        currentColumns.map((column) => {
+          if (column.id !== columnId || column.cards.some((card) => card.id === data.card.id)) {
+            return column;
+          }
+
+          return { ...column, cards: [...column.cards, data.card] };
+        })
+      );
+      setCardTitles((currentTitles) => ({ ...currentTitles, [columnId]: '' }));
+    } catch (error) {
+      setBoardError(error.message);
+    } finally {
+      setIsCreatingCard('');
+    }
   }
 
   function handleMessageSubmit(event) {
     event.preventDefault();
-
     const trimmedText = text.trim();
 
-    if (!trimmedText) {
-      return;
-    }
-
-    if (!socketRef.current) {
+    if (!trimmedText || !socketRef.current) {
       return;
     }
 
@@ -148,23 +307,20 @@ function App() {
       author: user?.name || 'Anonymous',
       text: trimmedText
     });
-
     setText('');
   }
 
   return (
     <main className="app-shell">
       <section className="intro">
-        <div className="mark">
-          RT
-        </div>
+        <div className="mark">RT</div>
         <div>
           <p className="eyebrow">Real-Time Collaboration Tool</p>
           <h1>{user ? `مرحباً ${user.name}` : 'تسجيل الدخول'}</h1>
           <p className="lede">
             {user
-              ? 'حسابك يعمل الآن. جرّب إرسال رسالة من نافذتين للتأكد من التعاون الفوري.'
-              : 'أنشئ حساباً أو سجّل الدخول للانتقال لاحقاً إلى لوحة التحكم.'}
+              ? 'افتح لوحة عمل لإدارة الأعمدة والبطاقات، ثم سنضيف السحب والإفلات في الخطوة القادمة.'
+              : 'أنشئ حساباً أو سجّل الدخول للانتقال إلى لوحة التحكم.'}
           </p>
         </div>
       </section>
@@ -251,47 +407,152 @@ function App() {
           </form>
         </section>
       ) : (
-        <section className="demo-panel" aria-label="Real-time message demo">
-          <div className="session-bar">
-            <div>
-              <strong>{user.email}</strong>
-              <p>الجلسة محفوظة محلياً في المتصفح.</p>
+        <>
+          <section className="dashboard-panel" aria-label="Boards dashboard">
+            <div className="session-bar">
+              <div>
+                <strong>{user.email}</strong>
+                <p>الجلسة محفوظة محلياً في المتصفح.</p>
+              </div>
+              <button type="button" className="secondary-button" onClick={handleLogout}>
+                خروج
+              </button>
             </div>
-            <button type="button" className="secondary-button" onClick={handleLogout}>
-              خروج
-            </button>
-          </div>
 
-          <form onSubmit={handleMessageSubmit} className="message-form">
-          <label>
-            الرسالة
-            <input
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-              placeholder="اكتب رسالة تجريبية"
-            />
-          </label>
-          <button type="submit" disabled={!isConnected}>
-            إرسال
-          </button>
-          </form>
+            <form onSubmit={handleCreateBoard} className="board-form">
+              <label>
+                اسم اللوحة
+                <input
+                  value={boardTitle}
+                  onChange={(event) => setBoardTitle(event.target.value)}
+                  placeholder="مثلاً: مشروع التخرج"
+                />
+              </label>
+              <button type="submit" disabled={isCreatingBoard}>
+                {isCreatingBoard ? 'جاري الإنشاء...' : 'إنشاء لوحة'}
+              </button>
+            </form>
 
-          <div className="messages">
-            {messages.length === 0 ? (
-              <p className="empty-state">لا توجد رسائل بعد.</p>
-            ) : (
-              messages.map((message) => (
-                <article key={message.id} className="message">
-                  <strong>{message.author}</strong>
-                  <p>{message.text}</p>
-                  <time dateTime={message.createdAt}>
-                    {new Date(message.createdAt).toLocaleTimeString('ar')}
-                  </time>
-                </article>
-              ))
-            )}
-          </div>
-        </section>
+            {boardsError ? <p className="form-error">{boardsError}</p> : null}
+
+            <div className="boards-list">
+              {isLoadingBoards ? (
+                <p className="empty-state">جاري تحميل اللوحات...</p>
+              ) : boards.length === 0 ? (
+                <p className="empty-state">ما عندك أي لوحة عمل بعد، ابدأ بإنشاء واحدة.</p>
+              ) : (
+                boards.map((board) => (
+                  <article key={board.id} className="board-card">
+                    <div>
+                      <h2>{board.title}</h2>
+                      <p>تم إنشاء الأعمدة الافتراضية لهذه اللوحة.</p>
+                    </div>
+                    <button type="button" className="small-button" onClick={() => openBoard(board.id)}>
+                      فتح
+                    </button>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
+
+          {selectedBoardId ? (
+            <section className="board-panel" aria-label="Selected board">
+              <div className="board-header">
+                <div>
+                  <p className="eyebrow">Board</p>
+                  <h2>{activeBoard?.title || 'جاري فتح اللوحة...'}</h2>
+                </div>
+                <button type="button" className="secondary-button" onClick={() => setSelectedBoardId('')}>
+                  رجوع
+                </button>
+              </div>
+
+              {boardError ? <p className="form-error">{boardError}</p> : null}
+
+              {isLoadingBoard ? (
+                <p className="empty-state">جاري تحميل اللوحة...</p>
+              ) : (
+                <div className="kanban-board">
+                  {columns.map((column) => (
+                    <section key={column.id} className="kanban-column">
+                      <header>
+                        <h3>{column.title}</h3>
+                        <span>{column.cards.length}</span>
+                      </header>
+
+                      <div className="card-list">
+                        {column.cards.length === 0 ? (
+                          <p className="column-empty">لا توجد بطاقات.</p>
+                        ) : (
+                          column.cards.map((card) => (
+                            <article key={card.id} className="task-card">
+                              <h4>{card.title}</h4>
+                              {card.description ? <p>{card.description}</p> : null}
+                            </article>
+                          ))
+                        )}
+                      </div>
+
+                      <form className="card-form" onSubmit={(event) => handleCreateCard(event, column.id)}>
+                        <input
+                          value={cardTitles[column.id] || ''}
+                          onChange={(event) =>
+                            setCardTitles((currentTitles) => ({
+                              ...currentTitles,
+                              [column.id]: event.target.value
+                            }))
+                          }
+                          placeholder="إضافة بطاقة"
+                        />
+                        <button type="submit" disabled={isCreatingCard === column.id}>
+                          {isCreatingCard === column.id ? '...' : 'إضافة'}
+                        </button>
+                      </form>
+                    </section>
+                  ))}
+                </div>
+              )}
+            </section>
+          ) : null}
+
+          <section className="demo-panel" aria-label="Real-time message demo">
+            <div>
+              <h2 className="section-title">اختبار التحديث الفوري</h2>
+              <p className="section-copy">افتح الصفحة في نافذتين، وأرسل رسالة للتأكد أن الاتصال الحي يعمل.</p>
+            </div>
+
+            <form onSubmit={handleMessageSubmit} className="message-form">
+              <label>
+                الرسالة
+                <input
+                  value={text}
+                  onChange={(event) => setText(event.target.value)}
+                  placeholder="اكتب رسالة تجريبية"
+                />
+              </label>
+              <button type="submit" disabled={!isConnected}>
+                إرسال
+              </button>
+            </form>
+
+            <div className="messages">
+              {messages.length === 0 ? (
+                <p className="empty-state">لا توجد رسائل بعد.</p>
+              ) : (
+                messages.map((message) => (
+                  <article key={message.id} className="message">
+                    <strong>{message.author}</strong>
+                    <p>{message.text}</p>
+                    <time dateTime={message.createdAt}>
+                      {new Date(message.createdAt).toLocaleTimeString('ar')}
+                    </time>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
+        </>
       )}
     </main>
   );

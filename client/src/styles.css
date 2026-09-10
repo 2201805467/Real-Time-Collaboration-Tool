@@ -120,7 +120,40 @@ h1 {
   background: #ffffff;
 }
 
+.dashboard-panel {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  border: 1px solid #d9e1e5;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.board-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.board-header {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.board-header h2 {
+  margin-bottom: 0;
+  font-size: 1.45rem;
+}
+
 .message-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.board-form {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) auto;
   gap: 14px;
@@ -230,6 +263,150 @@ button:disabled {
   background: #e2f3f6;
 }
 
+.boards-list {
+  display: grid;
+  gap: 12px;
+}
+
+.board-card {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 96px;
+  padding: 18px;
+  border: 1px solid #dfe7ea;
+  border-radius: 8px;
+  background: #f8fafb;
+}
+
+.board-card h2 {
+  margin-bottom: 8px;
+  font-size: 1.1rem;
+}
+
+.board-card p {
+  margin-bottom: 0;
+  color: #687781;
+  line-height: 1.6;
+}
+
+.board-card span {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: #0f5c2f;
+  background: #ddf5e8;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.small-button {
+  min-height: 38px;
+  padding: 8px 14px;
+}
+
+.kanban-board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(260px, 1fr));
+  gap: 16px;
+  align-items: start;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.kanban-column {
+  display: grid;
+  gap: 14px;
+  min-height: 320px;
+  padding: 14px;
+  border: 1px solid #d9e1e5;
+  border-radius: 8px;
+  background: #eef3f5;
+}
+
+.kanban-column header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.kanban-column h3 {
+  margin: 0;
+  color: #1f3038;
+  font-size: 1rem;
+}
+
+.kanban-column header span {
+  min-width: 28px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: #40616c;
+  background: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.card-list {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  min-height: 120px;
+}
+
+.task-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid #dce5e8;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgb(23 32 42 / 0.06);
+}
+
+.task-card h4 {
+  margin: 0;
+  color: #17202a;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.task-card p,
+.column-empty {
+  margin: 0;
+  color: #687781;
+  line-height: 1.6;
+}
+
+.column-empty {
+  padding: 16px;
+  border: 1px dashed #bdc9cf;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.card-form {
+  display: grid;
+  gap: 8px;
+}
+
+.card-form button {
+  width: 100%;
+}
+
+.section-title {
+  margin-bottom: 8px;
+  font-size: 1.1rem;
+}
+
+.section-copy {
+  margin-bottom: 0;
+  color: #687781;
+  line-height: 1.6;
+}
+
 .messages {
   display: grid;
   gap: 10px;
@@ -274,7 +451,8 @@ button:disabled {
 @media (max-width: 640px) {
   .intro,
   .status-grid,
-  .message-form {
+  .message-form,
+  .board-form {
     grid-template-columns: 1fr;
   }
 
@@ -286,5 +464,16 @@ button:disabled {
   .session-bar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .board-header,
+  .board-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .kanban-board {
+    grid-template-columns: minmax(260px, 1fr);
+    overflow-x: visible;
   }
 }
