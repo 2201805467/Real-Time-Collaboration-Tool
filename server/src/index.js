@@ -16,9 +16,43 @@ const io = new Server(httpServer, {
     methods: ['GET', 'POST']
   }
 });
+const boardPresence = new Map();
 
 app.use(cors());
 app.use(express.json());
+
+function getPresenceList(boardId) {
+  return Array.from(boardPresence.get(boardId)?.values() || []);
+}
+
+function emitPresence(boardId) {
+  io.to(`board:${boardId}`).emit('board:presence', {
+    boardId,
+    users: getPresenceList(boardId)
+  });
+}
+
+function removeSocketFromPresence(socket) {
+  const joinedBoards = socket.data.joinedBoards || new Set();
+
+  joinedBoards.forEach((boardId) => {
+    const users = boardPresence.get(boardId);
+
+    if (!users) {
+      return;
+    }
+
+    users.delete(socket.id);
+
+    if (users.size === 0) {
+      boardPresence.delete(boardId);
+    }
+
+    emitPresence(boardId);
+  });
+
+  socket.data.joinedBoards = new Set();
+}
 
 app.get('/api/health', (req, res) => {
   res.json({
@@ -522,12 +556,48 @@ io.on('connection', (socket) => {
     message: 'Connected to real-time server'
   });
 
-  socket.on('board:join', (boardId) => {
+  socket.data.joinedBoards = new Set();
+
+  socket.on('board:join', (payload) => {
+    const boardId = typeof payload === 'string' ? payload : payload?.boardId;
+    const user = typeof payload === 'object' ? payload.user : null;
+
+    if (!boardId || !user?.id) {
+      return;
+    }
+
     socket.join(`board:${boardId}`);
+    socket.data.joinedBoards.add(boardId);
+
+    if (!boardPresence.has(boardId)) {
+      boardPresence.set(boardId, new Map());
+    }
+
+    boardPresence.get(boardId).set(socket.id, {
+      id: user.id,
+      name: user.name || 'Anonymous',
+      email: user.email || '',
+      socketId: socket.id
+    });
+
+    emitPresence(boardId);
   });
 
   socket.on('board:leave', (boardId) => {
     socket.leave(`board:${boardId}`);
+    socket.data.joinedBoards.delete(boardId);
+
+    const users = boardPresence.get(boardId);
+
+    if (users) {
+      users.delete(socket.id);
+
+      if (users.size === 0) {
+        boardPresence.delete(boardId);
+      }
+    }
+
+    emitPresence(boardId);
   });
 
   socket.on('demo:message', (payload) => {
@@ -542,6 +612,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
+    removeSocketFromPresence(socket);
     console.log(`Socket disconnected: ${socket.id}`);
   });
 });

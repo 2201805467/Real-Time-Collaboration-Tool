@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+
+<html dir="rtl" lang="ar"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+          "on-secondary-fixed-variant": "#005236",
+          "on-primary-container": "#dad7ff",
+          "inverse-on-surface": "#eef0ff",
+          "surface-container-low": "#f2f3ff",
+          "surface-container-lowest": "#ffffff",
+          "surface-container-high": "#e2e7ff",
+          "primary-fixed-dim": "#c3c0ff",
+          "on-secondary-container": "#00714d",
+          "secondary-fixed-dim": "#4edea3",
+          "on-surface-variant": "#464555",
+          "primary-container": "#4f46e5",
+          "on-tertiary-fixed": "#3e0022",
+          "on-primary-fixed-variant": "#3323cc",
+          "surface-dim": "#d2d9f4",
+          "on-primary-fixed": "#0f0069",
+          "on-tertiary-fixed-variant": "#8c0053",
+          "on-secondary-fixed": "#002113",
+          "on-background": "#131b2e",
+          "outline-variant": "#c7c4d8",
+          "on-surface": "#131b2e",
+          "inverse-surface": "#283044",
+          "secondary": "#006c49",
+          "on-primary": "#ffffff",
+          "primary": "#3525cd",
+          "on-error": "#ffffff",
+          "tertiary-container": "#b6166f",
+          "surface-tint": "#4d44e3",
+          "on-error-container": "#93000a",
+          "secondary-fixed": "#6ffbbe",
+          "tertiary": "#8f0055",
+          "surface-container-highest": "#dae2fd",
+          "error-container": "#ffdad6",
+          "on-tertiary-container": "#ffcede",
+          "surface": "#faf8ff",
+          "on-secondary": "#ffffff",
+          "inverse-primary": "#c3c0ff",
+          "on-tertiary": "#ffffff",
+          "error": "#ba1a1a",
+          "surface-variant": "#dae2fd",
+          "background": "#faf8ff",
+          "outline": "#777587",
+          "primary-fixed": "#e2dfff",
+          "secondary-container": "#6cf8bb",
+          "surface-container": "#eaedff",
+          "surface-bright": "#faf8ff",
+          "tertiary-fixed": "#ffd9e4",
+          "tertiary-fixed-dim": "#ffb0cd"
+        },
+        "borderRadius": {
+          "DEFAULT": "0.25rem",
+          "lg": "0.5rem",
+          "xl": "0.75rem",
+          "full": "9999px"
+        },
+        "spacing": {
+          "margin-mobile": "1rem",
+          "margin": "1.5rem",
+          "space-sm": "0.5rem",
+          "gutter-sm": "0.5rem",
+          "space-lg": "1rem",
+          "space-xs": "0.25rem",
+          "gutter-lg": "1.5rem",
+          "space-2xl": "2rem",
+          "gutter": "1rem",
+          "space-md": "0.75rem",
+          "space-xl": "1.5rem"
+        },
+        "fontFamily": {
+          "headline-md": [
+            "IBM Plex Sans"
+          ],
+          "body-md": [
+            "IBM Plex Sans"
+          ],
+          "body-lg": [
+            "IBM Plex Sans"
+          ],
+          "label-md": [
+            "IBM Plex Sans"
+          ],
+          "label-sm": [
+            "IBM Plex Sans"
+          ],
+          "headline-lg": [
+            "IBM Plex Sans"
+          ],
+          "body-sm": [
+            "IBM Plex Sans"
+          ],
+          "headline-sm": [
+            "IBM Plex Sans"
+          ],
+          "display-lg-mobile": [
+            "IBM Plex Sans"
+          ],
+          "display-lg": [
+            "IBM Plex Sans"
+          ],
+          "code-sm": [
+            "JetBrains Mono"
+          ]
+        },
+        "fontSize": {
+          "headline-md": [
+            "20px",
+            {
+              "lineHeight": "30px",
+              "letterSpacing": "-0.01em",
+              "fontWeight": "600"
+            }
+          ],
+          "body-md": [
+            "14px",
+            {
+              "lineHeight": "22px",
+              "fontWeight": "400"
+            }
+          ],
+          "body-lg": [
+            "16px",
+            {
+              "lineHeight": "26px",
+              "fontWeight": "400"
+            }
+          ],
+          "label-md": [
+            "12px",
+            {
+              "lineHeight": "16px",
+              "letterSpacing": "0.01em",
+              "fontWeight": "500"
+            }
+          ],
+          "label-sm": [
+            "11px",
+            {
+              "lineHeight": "14px",
+              "letterSpacing": "0.02em",
+              "fontWeight": "600"
+            }
+          ],
+          "headline-lg": [
+            "24px",
+            {
+              "lineHeight": "34px",
+              "letterSpacing": "-0.015em",
+              "fontWeight": "600"
+            }
+          ],
+          "body-sm": [
+            "13px",
+            {
+              "lineHeight": "20px",
+              "fontWeight": "400"
+            }
+          ],
+          "headline-sm": [
+            "16px",
+            {
+              "lineHeight": "24px",
+              "fontWeight": "600"
+            }
+          ],
+          "display-lg-mobile": [
+            "28px",
+            {
+              "lineHeight": "38px",
+              "letterSpacing": "-0.01em",
+              "fontWeight": "700"
+            }
+          ],
+          "display-lg": [
+            "36px",
+            {
+              "lineHeight": "48px",
+              "letterSpacing": "-0.02em",
+              "fontWeight": "700"
+            }
+          ],
+          "code-sm": [
+            "12px",
+            {
+              "lineHeight": "18px",
+              "fontWeight": "400"
+            }
+          ]
+        }
+      },
+    },
+  }</script></head><body class="bg-surface font-body-md text-body-md text-on-surface antialiased"><aside class="fixed right-0 top-0 h-full w-64 bg-surface-container-low shadow-[0_1px_8px_rgba(0,0,0,0.04)] z-50 flex flex-col justify-between select-none"><div class="flex flex-col"><div class="h-16 px-space-md flex items-center justify-between"><div class="flex items-center gap-space-sm"><img alt="شعار منصة تدفق | Tadafuq Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAFKt8axh6PJehwQKAbil5FFeqjaHzOFrqv8UD5BeErabtpRfLaK6W_UQOc7llXtyaTIZFzxlgRJfe0PA8yDKxu-uwkA0d5JwFtdxmursMPnUjw1edEGd9ewt4QSXbIKjCF0BLEuQnymovikYU6iRHEpnHEM-Ab9UOjwoLuANuT0ShBCCcegQgVARXUu3gV8V7veJEWxhT3Ouj3tsRbjh42EMjFBJ5UQtdCeodiW60XV0nib2vbrOqS"/><div class="flex flex-col"><span class="font-headline-sm text-headline-sm text-on-surface tracking-tight leading-none">تدفق</span><span class="font-label-sm text-label-sm text-on-surface-variant font-code-sm">Tadafuq Cloud</span></div></div><button aria-label="طي القائمة" class="flex items-center justify-center w-8 h-8 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">dock_to_right</span></button></div><div class="px-space-md py-space-xs"><button class="w-full flex items-center justify-between p-space-sm rounded-lg bg-surface-container-lowest shadow-[0_1px_8px_rgba(0,0,0,0.04)] hover:bg-surface-container transition-colors text-start" type="button"><div class="flex items-center gap-space-sm overflow-hidden"><div class="w-7 h-7 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center flex-shrink-0 font-label-md text-label-md">م</div><div class="truncate"><p class="font-label-md text-label-md text-on-surface truncate">مساحة الابتكار التقني</p><p class="font-label-sm text-label-sm text-on-surface-variant">خطة الفرق الاحترافية</p></div></div><span class="material-symbols-outlined text-[18px] text-on-surface-variant">unfold_more</span></button></div><div class="px-space-md mt-space-md mb-space-xs"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider font-semibold">سير العمل والمشاريع</span></div><nav class="px-space-md flex flex-col gap-space-xs" data-active-classes="bg-primary-container text-on-primary-container font-semibold"><a aria-current="page" class="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg transition-all bg-primary-container text-on-primary-container font-semibold" data-path="kanban-board" href="#"><span class="material-symbols-outlined text-[20px]">view_kanban</span><span class="font-body-sm text-body-sm">لوحة الكانبان</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="workspace-projects" href="#"><span class="material-symbols-outlined text-[20px]">folder_supervised</span><span class="font-body-sm text-body-sm">نظرة عامة والمشاريع</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="team-presence" href="#"><span class="material-symbols-outlined text-[20px]">group_work</span><span class="font-body-sm text-body-sm">إدارة الفريق والصلاحيات</span><span class="mr-auto px-space-xs py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-label-sm">6 نشط</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="task-details" href="#"><span class="material-symbols-outlined text-[20px]">task_alt</span><span class="font-body-sm text-body-sm">تفاصيل المهمة والنشاط</span></a></nav></div><div class="flex flex-col p-space-md gap-space-sm"><div class="p-space-sm rounded-xl bg-surface-container-lowest shadow-[0_1px_8px_rgba(0,0,0,0.04)] flex flex-col gap-space-xs"><div class="flex items-center justify-between font-label-sm text-label-sm"><span class="text-on-surface-variant">المساحة السحابية</span><span class="font-semibold text-on-surface">78%</span></div><div class="w-full h-1.5 bg-surface-container rounded-full overflow-hidden"><div class="h-full bg-primary-container rounded-full w-[78%]"></div></div><div class="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant"><span>15.6 جيجابايت / 20 جيجابايت</span></div></div><div class="flex flex-col gap-space-xs"><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" href="#"><span class="material-symbols-outlined text-[20px]">settings</span><span class="font-body-sm text-body-sm">الإعدادات العامة</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" href="#"><span class="material-symbols-outlined text-[20px]">support_agent</span><span class="font-body-sm text-body-sm">الدعم الفني والتوثيق</span></a><div class="flex items-center justify-between px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[20px]">dark_mode</span><span class="font-body-sm text-body-sm">الوضع المظلم</span></div><div class="w-8 h-4 rounded-full bg-surface-container-high relative p-0.5 flex items-center justify-start cursor-pointer"><div class="w-3 h-3 rounded-full bg-surface shadow-[0_1px_8px_rgba(0,0,0,0.04)]"></div></div></div></div></div></aside><div class="pr-64"><header class="fixed top-0 left-0 right-64 h-16 bg-surface/85 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] z-40 flex items-center justify-between px-space-lg select-none"><div class="flex items-center gap-space-md"><div class="flex items-center gap-space-xs font-body-sm text-body-sm text-on-surface-variant"><span class="hover:text-on-surface cursor-pointer">المشاريع البرمجية</span><span class="material-symbols-outlined text-[16px] rtl:rotate-180">chevron_right</span><span class="text-on-surface font-headline-sm text-headline-sm">تطوير تطبيق تدفق V2.0</span></div><div class="inline-flex items-center gap-space-xs px-space-sm py-1 rounded-full bg-surface-container-low text-on-secondary-container"><span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary-fixed-dim opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-secondary"></span></span><span class="font-label-sm text-label-sm font-medium">مزامنة فورية</span></div></div><div class="flex items-center gap-space-md"><div class="flex items-center pl-space-sm"><div class="flex items-center -space-x-2 space-x-reverse"><div class="relative group cursor-pointer"><div class="w-8 h-8 rounded-full bg-primary-container text-on-primary font-label-md text-label-md flex items-center justify-center ring-2 ring-surface">س</div><span class="absolute -bottom-0.5 -left-0.5 w-2.5 h-2.5 rounded-full bg-secondary ring-2 ring-surface"></span></div><div class="relative group cursor-pointer"><div class="w-8 h-8 rounded-full bg-tertiary-container text-on-tertiary font-label-md text-label-md flex items-center justify-center ring-2 ring-surface">ع</div><span class="absolute -bottom-0.5 -left-0.5 w-2.5 h-2.5 rounded-full bg-secondary ring-2 ring-surface"></span></div><div class="relative group cursor-pointer"><div class="w-8 h-8 rounded-full bg-surface-container-highest text-on-surface font-label-md text-label-md flex items-center justify-center ring-2 ring-surface">ن</div><span class="absolute -bottom-0.5 -left-0.5 w-2.5 h-2.5 rounded-full bg-secondary ring-2 ring-surface"></span></div><div class="w-8 h-8 rounded-full bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm flex items-center justify-center ring-2 ring-surface">+3</div></div><div class="mr-space-xs flex items-center gap-1 bg-surface-container px-space-xs py-0.5 rounded-full font-label-sm text-label-sm text-secondary font-medium"><span class="w-1.5 h-1.5 rounded-full bg-secondary"></span><span>متصل الآن</span></div></div><div class="flex items-center gap-space-xs"><button class="flex items-center gap-space-xs px-space-sm py-1.5 rounded-lg bg-surface-container-low text-on-surface hover:bg-surface-container-high transition-colors font-body-sm text-body-sm" type="button"><span class="material-symbols-outlined text-[18px]">filter_list</span><span>تصفية</span></button><button class="flex items-center gap-space-xs px-space-sm py-1.5 rounded-lg bg-surface-container-low text-on-surface hover:bg-surface-container-high transition-colors font-body-sm text-body-sm" type="button"><span class="material-symbols-outlined text-[18px]">link</span><span>مشاركة</span></button><button class="flex items-center gap-space-xs px-space-md py-1.5 rounded-lg bg-primary text-on-primary hover:bg-primary-container hover:text-on-primary transition-colors font-body-sm text-body-sm font-semibold" type="button"><span class="material-symbols-outlined text-[18px]">person_add</span><span>دعوة عضو +</span></button></div><button aria-label="الإشعارات والتنبيهات" class="relative flex items-center justify-center w-9 h-9 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" type="button"><span class="material-symbols-outlined text-[22px]">notifications</span><span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-error ring-2 ring-surface"></span></button><div class="flex items-center gap-space-xs pr-space-xs cursor-pointer"><div class="relative"><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuATmWJN4Hd5Aa7SElR9B8oAIFnjdLzpBqmHOC-MVNlqNEKusTabVIWXo9jjxNOETaMssMhGL0NI9upZ9OwxSKo-_n3TMc0K-d_cu4wnw0PMzqCRR-ECEf-4w4wpqp5k8KjHOd6i9crpVgfLCve4qqbIokAbIkhVQDkm_GY8Lm9FW8PWh6K1dx24ClCk8YmLO9m9gX3dSEjXEzSEOZxb5cieZa37sBZMSDwAC3OWQZzLn7fKHb8sQtY9"/><span class="absolute bottom-0 left-0 w-2.5 h-2.5 rounded-full bg-secondary ring-2 ring-surface"></span></div><span class="material-symbols-outlined text-[18px] text-on-surface-variant">expand_more</span></div></div></header><main class="relative pt-16 w-full min-h-screen bg-surface"><div class="flex flex-col w-full">
+<!-- Sub-Header & Live Canvas Controls Bar -->
+<div class="px-space-xl py-space-md flex flex-col xl:flex-row xl:items-center xl:justify-between gap-space-md bg-surface-container-lowest shadow-sm z-20">
+<div class="flex flex-wrap items-center gap-space-md">
+<!-- Search Field -->
+<div class="relative w-72">
+<span class="material-symbols-outlined absolute right-3 top-2.5 text-[18px] text-outline">search</span>
+<input class="w-full h-10 pr-9 pl-3 rounded-lg bg-surface-container-low text-on-surface font-body-sm text-body-sm placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary-container/40 transition-all" id="taskSearch" placeholder="بحث سريع في المهام (Ctrl + K)..." type="text"/>
+<span class="absolute left-2.5 top-2.5 px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant font-code-sm text-[10px]">⌘K</span>
+</div>
+<!-- View Switcher -->
+<div class="flex items-center p-1 rounded-xl bg-surface-container-low">
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container-lowest shadow-sm text-primary font-body-sm text-body-sm font-semibold" type="button">
+<span class="material-symbols-outlined text-[18px]">view_kanban</span>
+<span>كانبان</span>
+</button>
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface font-body-sm text-body-sm transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">format_list_bulleted</span>
+<span>قائمة</span>
+</button>
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface font-body-sm text-body-sm transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">timeline</span>
+<span>جدول زمني</span>
+</button>
+</div>
+<!-- Priority Filter Pills -->
+<div class="flex items-center gap-1.5 overflow-x-auto">
+<span class="font-label-sm text-label-sm text-on-surface-variant ml-1">الأولوية:</span>
+<button class="px-2.5 py-1 rounded-full bg-surface-container font-label-sm text-label-sm text-on-surface hover:bg-surface-container-high transition-colors" type="button">الكل</button>
+<button class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-error-container text-on-error-container font-label-sm text-label-sm hover:opacity-90 transition-opacity" type="button">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+<span>عاجل</span>
+</button>
+<button class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-surface-container text-on-surface-variant hover:bg-surface-container-high font-label-sm text-label-sm transition-colors" type="button">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary-container"></span>
+<span>متوسط</span>
+</button>
+<button class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-surface-container text-on-surface-variant hover:bg-surface-container-high font-label-sm text-label-sm transition-colors" type="button">
+<span class="w-1.5 h-1.5 rounded-full bg-outline"></span>
+<span>عادي</span>
+</button>
+</div>
+</div>
+<!-- Actions & Speed Metric -->
+<div class="flex items-center gap-space-md justify-between xl:justify-end">
+<!-- Latency Badge -->
+<div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container-low text-on-surface-variant font-code-sm text-code-sm">
+<span class="inline-block w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+<span class="font-medium text-secondary">زمن الاستجابة: 12ms</span>
+<span class="text-outline">|</span>
+<span class="text-on-surface">مزامنة P2P مشفرة</span>
+</div>
+<!-- Assignees Filter Stack -->
+<div class="hidden sm:flex items-center -space-x-2 space-x-reverse cursor-pointer" title="تصفية حسب المسؤول">
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary font-label-sm text-label-sm flex items-center justify-center shadow-sm">س</div>
+<div class="w-8 h-8 rounded-full bg-tertiary-container text-on-tertiary font-label-sm text-label-sm flex items-center justify-center shadow-sm">ع</div>
+<div class="w-8 h-8 rounded-full bg-secondary text-on-secondary font-label-sm text-label-sm flex items-center justify-center shadow-sm">م</div>
+<div class="w-8 h-8 rounded-full bg-surface-container-highest text-on-surface-variant font-label-sm text-label-sm flex items-center justify-center shadow-sm">+4</div>
+</div>
+<!-- Primary Action -->
+<button class="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-container text-on-primary hover:bg-primary transition-all font-body-sm text-body-sm font-semibold shadow-sm active:scale-95" type="button">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span>مهمة جديدة</span>
+</button>
+</div>
+</div>
+<!-- Live Kanban Viewport Stage -->
+<div class="relative w-full overflow-x-auto p-space-xl min-h-[calc(100vh-140px)] select-none">
+<!-- Real-time Multiplayer Floating Cursor 1: سارة أحمد (Violet) -->
+<div class="absolute top-44 right-[38%] pointer-events-none z-30 transition-all duration-300 ease-out hidden md:flex flex-col items-start" style="transform: translate(12px, -8px);">
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full rounded-br-none bg-primary text-on-primary shadow-lg font-label-sm text-label-sm font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-fixed-dim animate-ping"></span>
+<span>سارة أحمد (تقوم بالنقل)</span>
+</div>
+<svg class="w-5 h-5 text-primary drop-shadow-md -rotate-45 -mr-1" fill="currentColor" viewbox="0 0 24 24">
+<path d="M3 3l7 18 3-7 7-3L3 3z"></path>
+</svg>
+</div>
+<!-- Real-time Multiplayer Floating Cursor 2: عمر خالد (Emerald) -->
+<div class="absolute top-96 right-[67%] pointer-events-none z-30 transition-all duration-500 ease-out hidden md:flex flex-col items-start" style="transform: translate(-10px, 4px);">
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full rounded-br-none bg-secondary text-on-secondary shadow-lg font-label-sm text-label-sm font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary-fixed animate-pulse"></span>
+<span>عمر خالد (يدقق الكود)</span>
+</div>
+<svg class="w-5 h-5 text-secondary drop-shadow-md -rotate-45 -mr-1" fill="currentColor" viewbox="0 0 24 24">
+<path d="M3 3l7 18 3-7 7-3L3 3z"></path>
+</svg>
+</div>
+<!-- Kanban Grid (4 Distinct Columns) -->
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-space-lg w-full max-w-[1720px] mx-auto items-start">
+<!-- ============================================== -->
+<!-- 1. COLUMN: المهام الجديدة (To Do) -->
+<!-- ============================================== -->
+<div class="flex flex-col bg-surface-container-low/80 rounded-2xl p-space-md shadow-sm">
+<!-- Column Header -->
+<div class="flex items-center justify-between pb-space-sm mb-space-sm">
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-outline"></span>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">المهام الجديدة</h2>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-label-sm text-label-sm font-bold">5</span>
+</div>
+<div class="flex items-center gap-1 text-on-surface-variant">
+<button aria-label="خيارات العمود" class="p-1 rounded hover:bg-surface-container-high transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">more_horiz</span>
+</button>
+<button aria-label="إضافة سريعة" class="p-1 rounded hover:bg-surface-container-high transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">add</span>
+</button>
+</div>
+</div>
+<!-- Cards Container -->
+<div class="flex flex-col gap-space-md">
+<!-- Card 1.1: Architecture Plan -->
+<div class="group bg-surface-container-lowest rounded-xl p-space-md shadow-sm hover:shadow-md transition-all duration-200 cursor-grab active:cursor-grabbing hover:-translate-y-0.5">
+<div class="flex items-center justify-between mb-space-xs">
+<span class="px-2 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed-variant font-label-sm text-label-sm font-semibold">بنية النظام</span>
+<span class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-error-container text-on-error-container font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+<span>عاجل</span>
+</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-space-xs group-hover:text-primary transition-colors">
+              تصميم معمارية المزامنة اللحظية (WebSockets Engine)
+            </h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2 mb-space-md">
+              بناء بنية الربط عالي التردد لنقل إحداثيات مؤشرات المستخدمين وتحديثات بطاقات كانبان في أجزاء من الثانية.
+            </p>
+<!-- Checklist Progress -->
+<div class="flex flex-col gap-1 mb-space-md bg-surface-container-low p-2 rounded-lg">
+<div class="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant">
+<span class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">checklist</span>
+<span>قائمة المهام الفرعية</span>
+</span>
+<span class="font-code-sm text-on-surface font-semibold">2/4</span>
+</div>
+<div class="w-full h-1.5 rounded-full bg-surface-container-high overflow-hidden">
+<div class="w-2/4 h-full bg-primary-container rounded-full"></div>
+</div>
+</div>
+<!-- Card Footer -->
+<div class="flex items-center justify-between pt-space-xs">
+<div class="flex items-center -space-x-1.5 space-x-reverse">
+<div class="w-6 h-6 rounded-full bg-primary-container text-on-primary font-label-sm text-[10px] flex items-center justify-center ring-2 ring-surface-container-lowest">ط</div>
+<div class="w-6 h-6 rounded-full bg-secondary text-on-secondary font-label-sm text-[10px] flex items-center justify-center ring-2 ring-surface-container-lowest">م</div>
+</div>
+<div class="flex items-center gap-3 text-on-surface-variant font-label-sm text-label-sm">
+<span class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">chat_bubble_outline</span>
+<span>7</span>
+</span>
+<span class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">attach_file</span>
+<span>3</span>
+</span>
+<span class="flex items-center gap-1 text-error font-medium">
+<span class="material-symbols-outlined text-[15px]">schedule</span>
+<span>غداً</span>
+</span>
+</div>
+</div>
+</div>
+<!-- Card 1.2: Design Tokens Spec -->
+<div class="group bg-surface-container-lowest rounded-xl p-space-md shadow-sm hover:shadow-md transition-all duration-200 cursor-grab active:cursor-grabbing hover:-translate-y-0.5">
+<div class="flex items-center justify-between mb-space-xs">
+<span class="px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-label-sm font-semibold">واجهة المستخدم</span>
+<span class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-outline"></span>
+<span>عادي</span>
+</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-space-xs group-hover:text-primary transition-colors">
+              توحيد مصفوفة رموز الألوان وتدرجات النمط الليلي
+            </h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2 mb-space-md">
+              تطبيق توكنات Tailwind 4 ومواءمتها مع مكتبة المكونات المحدثة في Figma لدعم التباين العالي.
+            </p>
+<div class="flex items-center justify-between pt-space-xs">
+<div class="w-6 h-6 rounded-full bg-tertiary-container text-on-tertiary font-label-sm text-[10px] flex items-center justify-center ring-2 ring-surface-container-lowest">س</div>
+<div class="flex items-center gap-3 text-on-surface-variant font-label-sm text-label-sm">
+<span class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">chat_bubble_outline</span>
+<span>2</span>
+</span>
+<span class="flex items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-[15px]">schedule</span>
+<span>14 أبريل</span>
+</span>
+</div>
+</div>
+</div>
+<!-- Card 1.3: Data Migration Script -->
+<div class="group bg-surface-container-lowest rounded-xl p-space-md shadow-sm hover:shadow-md transition-all duration-200 cursor-grab active:cursor-grabbing hover:-translate-y-0.5">
+<div class="flex items-center justify-between mb-space-xs">
+<span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface font-label-sm text-label-sm font-semibold">أمان البيانات</span>
+<span class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary-container"></span>
+<span>متوسط</span>
+</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-space-xs group-hover:text-primary transition-colors">
+              مراجعة تشفير قاعدة البيانات في وضع السكون
+            </h3>
+<div class="flex items-center justify-between pt-space-xs">
+<div class="w-6 h-6 rounded-full bg-outline text-surface-container-lowest font-label-sm text-[10px] flex items-center justify-center ring-2 ring-surface-container-lowest">ع</div>
+<div class="flex items-center gap-3 text-on-surface-variant font-label-sm text-label-sm">
+<span class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">attach_file</span>
+<span>1</span>
+</span>
+<span class="flex items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-[15px]">schedule</span>
+<span>20 أبريل</span>
+</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Add Card Button -->
+<button class="mt-space-md w-full py-2 px-3 rounded-xl bg-surface-container-lowest hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface flex items-center justify-center gap-2 font-body-sm text-body-sm transition-all shadow-sm" type="button">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span>إضافة بطاقة جديدة</span>
+</button>
+</div>
+<!-- ============================================== -->
+<!-- 2. COLUMN: قيد التنفيذ (In Progress) -->
+<!-- ============================================== -->
+<div class="flex flex-col bg-surface-container-low/80 rounded-2xl p-space-md shadow-sm">
+<!-- Column Header -->
+<div class="flex items-center justify-between pb-space-sm mb-space-sm">
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-primary-container animate-ping"></span>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">قيد التنفيذ</h2>
+<span class="px-2 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed-variant font-label-sm text-label-sm font-bold">4</span>
+</div>
+<div class="flex items-center gap-1 text-on-surface-variant">
+<button aria-label="خيارات العمود" class="p-1 rounded hover:bg-surface-container-high transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">more_horiz</span>
+</button>
+<button aria-label="إضافة سريعة" class="p-1 rounded hover:bg-surface-container-high transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">add</span>
+</button>
+</div>
+</div>
+<!-- Cards Container -->
+<div class="flex flex-col gap-space-md">
+<!-- Card 2.1 (Active Drag/Focus Simulation) -->
+<div class="group bg-surface-container-lowest rounded-xl p-space-md shadow-md hover:shadow-xl transition-all duration-200 cursor-grab active:cursor-grabbing hover:-translate-y-1 relative overflow-hidden">
+<!-- Active collaborator accent stripe -->
+<div class="absolute top-0 right-0 left-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary-container"></div>
+<div class="flex items-center justify-between mb-space-xs mt-1">
+<span class="px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-label-sm font-semibold">واجهة المستخدم</span>
+<span class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-error-container text-on-error-container font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+<span>عاجل</span>
+</span>
+</div>
+<div class="flex items-center gap-2 my-1 text-primary font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-[16px]">touch_app</span>
+<span>سارة تجري تعديلات الآن...</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-space-xs group-hover:text-primary transition-colors">
+              بناء مكونات لوحة كانبان بدعم السحب والإفلات التفاعلي
+            </h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2 mb-space-md">
+              دمج محرك الترتيب الحركي، مع مؤشرات الهبوط البصرية اللحظية للفرق المتزامنة على نفس الشاشة.
+            </p>
+<!-- Visual Preview Attachment Asset -->
+<div class="mb-space-md rounded-lg overflow-hidden bg-surface-container relative">
+<img class="w-full h-28 object-cover rounded-lg" data-alt="A clean modern productivity app interface mockup displaying smooth glassmorphism Kanban boards, dark slate typography, neon violet and emerald accents, high-end Saudi fintech workspace layout, soft studio lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuASYpY7Ht1ZPISUxWuu6FQK9qzDJIpVtzDvPqnYn3hU8CwFpOqKpu-KTlk45ohzL4C0DnHWeS_b__lv7KSgxRXU0lJnI-cjFrQq-Ia97U9HMuwA_CuWqrRzzWo5aE-jB0uBF4ilMCR4kDZLrCVll9ZDiOuNmbu-9Wql56oGxP1jUdoDcAHDWJnKtabQPzv2QGsiZZ4vLWm_qQwKFTFeYqMmoAX4pJZv_1rl-i_xgNswsILMjo-wMYZ_"/>
+<span class="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-inverse-surface/80 text-inverse-on-surface font-label-sm text-[10px] backdrop-blur-md">مرفق التصميم V2</span>
+</div>
+<!-- Subtask progress -->
+<div class="flex flex-col gap-1 mb-space-md bg-surface-container-low p-2 rounded-lg">
+<div class="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant">
+<span class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">checklist</span>
+<span>إنجاز المهام</span>
+</span>
+<span class="font-code-sm text-on-surface font-semibold">3/5</span>
+</div>
+<div class="w-full h-1.5 rounded-full bg-surface-container-high overflow-hidden">
+<div class="w-3/5 h-full bg-primary-container rounded-full"></div>
+</div>
+</div>
+<div class="flex items-center justify-between pt-space-xs">
+<div class="flex items-center -space-x-1.5 space-x-reverse">
+<div class="w-6 h-6 rounded-full bg-primary-container text-on-primary font-label-sm text-[10px] flex items-center justify-center ring-2 ring-primary">س</div>
+</div>
+<div class="flex items-center gap-3 text-on-surface-variant font-label-sm text-label-sm">
+<span class="flex items-center gap-1 text-primary font-semibold">
+<span class="material-symbols-outlined text-[15px]">chat_bubble</span>
+<span>14</span>
+</span>
+<span class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">attach_file</span>
+<span>4</span>
+</span>
+<span class="flex items-center gap-1 text-tertiary-container font-semibold">
+<span class="material-symbols-outlined text-[15px]">schedule</span>
+<span>اليوم</span>
+</span>
+</div>
+</div>
+</div>
+<!-- Card 2.2: API Integration -->
+<div class="group bg-surface-container-lowest rounded-xl p-space-md shadow-sm hover:shadow-md transition-all duration-200 cursor-grab active:cursor-grabbing hover:-translate-y-0.5">
+<div class="flex items-center justify-between mb-space-xs">
+<span class="px-2 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed-variant font-label-sm text-label-sm font-semibold">الخلفية البرمجية</span>
+<span class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary-container"></span>
+<span>متوسط</span>
+</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-space-xs group-hover:text-primary transition-colors">
+              تكامل بوابات الدفع الإلكتروني (مدى و Apple Pay)
+            </h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2 mb-space-md">
+              ربط الويب هوك الخاص بمدفوعات الاشتراكات السنوية وتفعيل الترقية الفورية للفرق والمؤسسات.
+            </p>
+<div class="flex items-center justify-between pt-space-xs">
+<div class="w-6 h-6 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-[10px] flex items-center justify-center ring-2 ring-surface-container-lowest">ف</div>
+<div class="flex items-center gap-3 text-on-surface-variant font-label-sm text-label-sm">
+<span class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">chat_bubble_outline</span>
+<span>5</span>
+</span>
+<span class="flex items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-[15px]">schedule</span>
+<span>متبقي 3 أيام</span>
+</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Add Card Button -->
+<button class="mt-space-md w-full py-2 px-3 rounded-xl bg-surface-container-lowest hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface flex items-center justify-center gap-2 font-body-sm text-body-sm transition-all shadow-sm" type="button">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span>إضافة بطاقة جديدة</span>
+</button>
+</div>
+<!-- ============================================== -->
+<!-- 3. COLUMN: قيد المراجعة والتدقيق (In Review) -->
+<!-- ============================================== -->
+<div class="flex flex-col bg-surface-container-low/80 rounded-2xl p-space-md shadow-sm">
+<!-- Column Header -->
+<div class="flex items-center justify-between pb-space-sm mb-space-sm">
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-tertiary-container"></span>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">قيد المراجعة</h2>
+<span class="px-2 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant font-label-sm text-label-sm font-bold">3</span>
+</div>
+<div class="flex items-center gap-1 text-on-surface-variant">
+<button aria-label="خيارات العمود" class="p-1 rounded hover:bg-surface-container-high transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">more_horiz</span>
+</button>
+<button aria-label="إضافة سريعة" class="p-1 rounded hover:bg-surface-container-high transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">add</span>
+</button>
+</div>
+</div>
+<!-- Cards Container -->
+<div class="flex flex-col gap-space-md">
+<!-- Card 3.1: Code Review (Hovered by Omar) -->
+<div class="group bg-surface-container-lowest rounded-xl p-space-md shadow-sm hover:shadow-md transition-all duration-200 cursor-grab active:cursor-grabbing hover:-translate-y-0.5 relative">
+<div class="flex items-center justify-between mb-space-xs">
+<span class="px-2 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed-variant font-label-sm text-label-sm font-semibold">الخلفية البرمجية</span>
+<span class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-error-container text-on-error-container font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+<span>عاجل</span>
+</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-space-xs group-hover:text-primary transition-colors">
+              تدقيق أمني لمفاتيح واجهات API وصلاحيات JWT
+            </h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2 mb-space-md">
+              فحص دوري لآليات التحقق من الهوية الثنائية وسياسة التخزين المؤقت في Redis لمنع هجمات التكرار.
+            </p>
+<!-- Test coverage progress bar -->
+<div class="flex flex-col gap-1 mb-space-md bg-surface-container-low p-2 rounded-lg">
+<div class="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant">
+<span class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">verified</span>
+<span>تغطية اختبارات الوحدة</span>
+</span>
+<span class="font-code-sm text-secondary font-semibold">94%</span>
+</div>
+<div class="w-full h-1.5 rounded-full bg-surface-container-high overflow-hidden">
+<div class="w-[94%] h-full bg-secondary rounded-full"></div>
+</div>
+</div>
+<div class="flex items-center justify-between pt-space-xs">
+<div class="flex items-center -space-x-1.5 space-x-reverse">
+<div class="w-6 h-6 rounded-full bg-secondary text-on-secondary font-label-sm text-[10px] flex items-center justify-center ring-2 ring-secondary-fixed">ع</div>
+<div class="w-6 h-6 rounded-full bg-surface-container-highest text-on-surface font-label-sm text-[10px] flex items-center justify-center ring-2 ring-surface-container-lowest">ن</div>
+</div>
+<div class="flex items-center gap-3 text-on-surface-variant font-label-sm text-label-sm">
+<span class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">chat_bubble_outline</span>
+<span>9</span>
+</span>
+<span class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">bug_report</span>
+<span>0</span>
+</span>
+<span class="flex items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-[15px]">schedule</span>
+<span>أمس</span>
+</span>
+</div>
+</div>
+</div>
+<!-- Card 3.2: RTL Typography QA -->
+<div class="group bg-surface-container-lowest rounded-xl p-space-md shadow-sm hover:shadow-md transition-all duration-200 cursor-grab active:cursor-grabbing hover:-translate-y-0.5">
+<div class="flex items-center justify-between mb-space-xs">
+<span class="px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-label-sm font-semibold">تجربة المستخدم</span>
+<span class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-outline"></span>
+<span>عادي</span>
+</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-space-xs group-hover:text-primary transition-colors">
+              فحص اتساق اتجاه خط IBM Plex Sans Arabic في الجداول
+            </h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2 mb-space-md">
+              التأكد من دقة محاذاة الأرقام الإنجليزية والعربية في أعمدة التواريخ والتقارير المالية المصدرة.
+            </p>
+<div class="flex items-center justify-between pt-space-xs">
+<div class="w-6 h-6 rounded-full bg-tertiary-container text-on-tertiary font-label-sm text-[10px] flex items-center justify-center ring-2 ring-surface-container-lowest">س</div>
+<div class="flex items-center gap-3 text-on-surface-variant font-label-sm text-label-sm">
+<span class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">chat_bubble_outline</span>
+<span>3</span>
+</span>
+<span class="flex items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-[15px]">schedule</span>
+<span>متبقي يومين</span>
+</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Add Card Button -->
+<button class="mt-space-md w-full py-2 px-3 rounded-xl bg-surface-container-lowest hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface flex items-center justify-center gap-2 font-body-sm text-body-sm transition-all shadow-sm" type="button">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span>إضافة بطاقة جديدة</span>
+</button>
+</div>
+<!-- ============================================== -->
+<!-- 4. COLUMN: المكتملة (Done) -->
+<!-- ============================================== -->
+<div class="flex flex-col bg-surface-container-low/80 rounded-2xl p-space-md shadow-sm">
+<!-- Column Header -->
+<div class="flex items-center justify-between pb-space-sm mb-space-sm">
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-secondary"></span>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">المهام المكتملة</h2>
+<span class="px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm font-bold">8</span>
+</div>
+<div class="flex items-center gap-1 text-on-surface-variant">
+<button aria-label="خيارات العمود" class="p-1 rounded hover:bg-surface-container-high transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">more_horiz</span>
+</button>
+<button aria-label="إضافة سريعة" class="p-1 rounded hover:bg-surface-container-high transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">add</span>
+</button>
+</div>
+</div>
+<!-- Cards Container -->
+<div class="flex flex-col gap-space-md">
+<!-- Card 4.1: Done Card -->
+<div class="group bg-surface-container-lowest rounded-xl p-space-md shadow-sm opacity-90 hover:opacity-100 hover:shadow-md transition-all duration-200 cursor-grab active:cursor-grabbing hover:-translate-y-0.5">
+<div class="flex items-center justify-between mb-space-xs">
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm font-semibold line-through">البنية التحتية</span>
+<span class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-label-sm font-semibold">
+<span class="material-symbols-outlined text-[14px]">check</span>
+<span>تم الإنجاز</span>
+</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-space-xs line-through text-outline">
+              إعداد بيئات الاستضافة السحابية مع موازن الأحمال
+            </h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2 mb-space-md">
+              نشر خوادم Kubernetes وتكوين خطوط الإنتاج المؤتمتة CI/CD بنجاح على سيرفرات الرياض.
+            </p>
+<!-- Complete stats indicator -->
+<div class="flex items-center justify-between pt-space-xs">
+<div class="w-6 h-6 rounded-full bg-secondary text-on-secondary font-label-sm text-[10px] flex items-center justify-center ring-2 ring-surface-container-lowest">م</div>
+<div class="flex items-center gap-3 text-on-surface-variant font-label-sm text-label-sm">
+<span class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">chat_bubble_outline</span>
+<span>11</span>
+</span>
+<span class="flex items-center gap-1 text-secondary font-medium">
+<span class="material-symbols-outlined text-[15px]">done_all</span>
+<span>أُغلقت</span>
+</span>
+</div>
+</div>
+</div>
+<!-- Card 4.2: Auth Module Done -->
+<div class="group bg-surface-container-lowest rounded-xl p-space-md shadow-sm opacity-90 hover:opacity-100 hover:shadow-md transition-all duration-200 cursor-grab active:cursor-grabbing hover:-translate-y-0.5">
+<div class="flex items-center justify-between mb-space-xs">
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm font-semibold line-through">الأمان</span>
+<span class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-label-sm font-semibold">
+<span class="material-symbols-outlined text-[14px]">check</span>
+<span>تم الإنجاز</span>
+</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-space-xs line-through text-outline">
+              تفعيل تسجيل الدخول الموحد (SSO) مع Google Workspace
+            </h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2 mb-space-md">
+              تم بنجاح تفعيل الربط للشركات التقنية الكبرى مع إدارة مركزية لصلاحيات الوصول للفرق.
+            </p>
+<div class="flex items-center justify-between pt-space-xs">
+<div class="w-6 h-6 rounded-full bg-primary-container text-on-primary font-label-sm text-[10px] flex items-center justify-center ring-2 ring-surface-container-lowest">س</div>
+<div class="flex items-center gap-3 text-on-surface-variant font-label-sm text-label-sm">
+<span class="flex items-center gap-1 text-secondary font-medium">
+<span class="material-symbols-outlined text-[15px]">done_all</span>
+<span>أُغلقت</span>
+</span>
+</div>
+</div>
+</div>
+<!-- Visual Snapshot Card for Launch Banner -->
+<div class="group bg-surface-container-lowest rounded-xl p-space-md shadow-sm opacity-90 hover:opacity-100 hover:shadow-md transition-all duration-200 cursor-grab active:cursor-grabbing hover:-translate-y-0.5">
+<div class="flex items-center justify-between mb-space-xs">
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm font-semibold line-through">الهوية والتسويق</span>
+<span class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-label-sm font-semibold">
+<span class="material-symbols-outlined text-[14px]">check</span>
+<span>تم الإنجاز</span>
+</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-space-xs line-through text-outline">
+              حملة إطلاق الإصدار Tadafuq Cloud 2.0
+            </h3>
+<div class="mb-space-md rounded-lg overflow-hidden bg-surface-container">
+<img class="w-full h-24 object-cover grayscale contrast-125" data-alt="Modern collaborative tech team celebrating product launch in an open-concept Riyadh co-working office, soft cinematic warm lighting, elegant glass walls with Tadafuq branding, sleek minimalist aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCEm1ugz0TtvhsuwA4hZZi76HAXWsU-OWJYXs_bab6zvDCcPPXwVGGVI-6R8pDprmFPMCq_xnNu_NGJfZLJTRFA9RAERmyrxNuWxgUO3xv8Kc-u6dtKH5jkapDJKo7myh2cm-T1-3qGg3LfRc4xAtIOaYgUAMSN9_CyRD0i_KxvxzTXeJTv0o41Qdi7aVGWBVJoo3cP086-YSZkQboOml9eq4H7LrqAYPJprx5Zrgt90UX_GEngXLmw"/>
+</div>
+<div class="flex items-center justify-between pt-space-xs">
+<div class="w-6 h-6 rounded-full bg-outline text-surface-container-lowest font-label-sm text-[10px] flex items-center justify-center ring-2 ring-surface-container-lowest">ن</div>
+<div class="flex items-center gap-2 text-secondary font-label-sm text-label-sm font-medium">
+<span class="material-symbols-outlined text-[15px]">task_alt</span>
+<span>منجز بالكامل</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Add Card Button -->
+<button class="mt-space-md w-full py-2 px-3 rounded-xl bg-surface-container-lowest hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface flex items-center justify-center gap-2 font-body-sm text-body-sm transition-all shadow-sm" type="button">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span>إضافة بطاقة جديدة</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Real-time Sync Floating Footer Pill -->
+<div class="fixed bottom-6 left-8 z-40 flex items-center gap-3 px-4 py-2 rounded-full bg-inverse-surface/90 text-inverse-on-surface backdrop-blur-xl shadow-xl border-0 text-body-sm font-body-sm">
+<div class="flex items-center gap-2">
+<span class="relative flex h-2.5 w-2.5">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary-fixed opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-secondary-fixed"></span>
+</span>
+<span>4 أعضاء يتصفحون هذه اللوحة الآن</span>
+</div>
+<div class="h-3 w-px bg-outline/40"></div>
+<button class="text-secondary-fixed hover:underline font-label-sm text-label-sm font-semibold" type="button">
+      عرض سجل التغييرات
+    </button>
+</div>
+</div>
+<script>
+  (function() {
+    // Quick search interactive filtering for cards
+    const searchInput = document.getElementById('taskSearch');
+    if (searchInput) {
+      searchInput.addEventListener('input', function(e) {
+        const query = e.target.value.toLowerCase().trim();
+        const cards = document.querySelectorAll('.group.bg-surface-container-lowest');
+        cards.forEach(card => {
+          const title = card.querySelector('h3') ? card.querySelector('h3').innerText.toLowerCase() : '';
+          const body = card.querySelector('p') ? card.querySelector('p').innerText.toLowerCase() : '';
+          if (!query || title.includes(query) || body.includes(query)) {
+            card.style.display = 'block';
+          } else {
+            card.style.display = 'none';
+          }
+        });
+      });
+    }
+
+    // Keyboard shortcut for Command+K focus
+    window.addEventListener('keydown', function(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        if (searchInput) searchInput.focus();
+      }
+    });
+  })();
+</script></main></div></body></html>

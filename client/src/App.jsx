@@ -59,6 +59,7 @@ function App() {
   const [selectedBoardId, setSelectedBoardId] = useState('');
   const [activeBoard, setActiveBoard] = useState(null);
   const [columns, setColumns] = useState([]);
+  const [presenceUsers, setPresenceUsers] = useState([]);
   const [boardError, setBoardError] = useState('');
   const [isLoadingBoard, setIsLoadingBoard] = useState(false);
   const [cardTitles, setCardTitles] = useState({});
@@ -170,6 +171,10 @@ function App() {
       });
     }
 
+    function handlePresence(payload) {
+      setPresenceUsers(payload.users || []);
+    }
+
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
     socket.on('demo:message', handleMessage);
@@ -177,6 +182,7 @@ function App() {
     socket.on('board:card-moved', handleCardMoved);
     socket.on('board:card-updated', handleCardUpdated);
     socket.on('board:comment-created', handleCommentCreated);
+    socket.on('board:presence', handlePresence);
 
     return () => {
       socket.off('connect', handleConnect);
@@ -186,22 +192,27 @@ function App() {
       socket.off('board:card-moved', handleCardMoved);
       socket.off('board:card-updated', handleCardUpdated);
       socket.off('board:comment-created', handleCommentCreated);
+      socket.off('board:presence', handlePresence);
       socket.disconnect();
       socketRef.current = null;
     };
   }, []);
 
   useEffect(() => {
-    if (!selectedBoardId || !socketRef.current) {
+    if (!selectedBoardId || !socketRef.current || !user) {
       return;
     }
 
-    socketRef.current.emit('board:join', selectedBoardId);
+    socketRef.current.emit('board:join', {
+      boardId: selectedBoardId,
+      user
+    });
 
     return () => {
       socketRef.current?.emit('board:leave', selectedBoardId);
+      setPresenceUsers([]);
     };
-  }, [selectedBoardId]);
+  }, [selectedBoardId, user]);
 
   useEffect(() => {
     selectedCardIdRef.current = selectedCardId;
@@ -287,6 +298,7 @@ function App() {
     setSelectedBoardId(boardId);
     setActiveBoard(null);
     setColumns([]);
+    setPresenceUsers([]);
     setBoardError('');
     setIsLoadingBoard(true);
 
@@ -305,6 +317,7 @@ function App() {
       setSelectedCardId('');
       setSelectedCard(null);
       setComments([]);
+      setPresenceUsers([]);
     } catch (error) {
       setBoardError(error.message);
     } finally {
@@ -354,6 +367,7 @@ function App() {
     setSelectedBoardId('');
     setActiveBoard(null);
     setColumns([]);
+    setPresenceUsers([]);
     setCardTitles({});
     setSelectedCardId('');
     setSelectedCard(null);
@@ -594,8 +608,53 @@ function App() {
     setText('');
   }
 
+  const activeBoardTitle = activeBoard?.title || 'لوحة الكانبان';
+
   return (
-    <main className="app-shell">
+    <main className={user ? 'workspace-shell' : 'app-shell'}>
+      {user ? (
+        <>
+          <aside className="workspace-sidebar" aria-label="Workspace navigation">
+            <div className="brand-block">
+              <div className="brand-mark">ت</div>
+              <div>
+                <strong>تدفق</strong>
+                <span>Tadafuq Cloud</span>
+              </div>
+            </div>
+
+            <div className="workspace-card">
+              <span>مساحة العمل</span>
+              <strong>{user.name}</strong>
+            </div>
+
+            <nav className="side-nav" aria-label="Main navigation">
+              <a className="active" href="#boards">لوحات العمل</a>
+              <a href="#kanban">لوحة الكانبان</a>
+              <a href="#presence">الفريق المتصل</a>
+              <a href="#activity">النشاط والتعليقات</a>
+            </nav>
+
+            <div className="sidebar-footer">
+              <span>Socket.io</span>
+              <strong>{isConnected ? 'متصل الآن' : 'غير متصل'}</strong>
+            </div>
+          </aside>
+
+          <header className="workspace-topbar">
+            <div>
+              <span>المشاريع البرمجية</span>
+              <strong>{activeBoardTitle}</strong>
+            </div>
+            <div className="topbar-actions">
+              <span className={isConnected ? 'live-pill online' : 'live-pill'}>مزامنة فورية</span>
+              <button type="button" className="secondary-button">تصفية</button>
+              <button type="button" className="secondary-button">مشاركة</button>
+            </div>
+          </header>
+        </>
+      ) : null}
+
       <section className="intro">
         <div className="mark">RT</div>
         <div>
@@ -742,10 +801,24 @@ function App() {
 
           {selectedBoardId ? (
             <section className="board-panel" aria-label="Selected board">
-              <div className="board-header">
+              <div className="board-header" id="kanban">
                 <div>
-                  <p className="eyebrow">Board</p>
+                  <p className="eyebrow">Live Kanban Board</p>
                   <h2>{activeBoard?.title || 'جاري فتح اللوحة...'}</h2>
+                </div>
+                <div className="presence-strip" aria-label="Users currently viewing this board">
+                  {presenceUsers.length === 0 ? (
+                    <span className="presence-empty">بانتظار أعضاء الفريق</span>
+                  ) : (
+                    presenceUsers.map((presenceUser) => (
+                      <span key={presenceUser.socketId} className="presence-user" title={presenceUser.email}>
+                        {presenceUser.name.slice(0, 2)}
+                      </span>
+                    ))
+                  )}
+                  {presenceUsers.length > 0 ? (
+                    <span className="presence-label">{presenceUsers.length} متصل الآن</span>
+                  ) : null}
                 </div>
                 <button type="button" className="secondary-button" onClick={() => setSelectedBoardId('')}>
                   رجوع
