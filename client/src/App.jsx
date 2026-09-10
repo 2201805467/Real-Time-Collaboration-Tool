@@ -16,7 +16,7 @@ function DroppableColumn({ column, children }) {
   );
 }
 
-function DraggableCard({ card }) {
+function DraggableCard({ card, onOpen }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: card.id
   });
@@ -29,10 +29,12 @@ function DraggableCard({ card }) {
       ref={setNodeRef}
       className={isDragging ? 'task-card dragging' : 'task-card'}
       style={style}
+      onClick={() => onOpen(card.id)}
       {...listeners}
       {...attributes}
     >
       <h4>{card.title}</h4>
+      {card.dueDate ? <span className="due-date">{card.dueDate}</span> : null}
       {card.description ? <p>{card.description}</p> : null}
     </article>
   );
@@ -41,6 +43,7 @@ function DraggableCard({ card }) {
 function App() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const socketRef = useRef(null);
+  const selectedCardIdRef = useRef('');
   const [isConnected, setIsConnected] = useState(false);
   const [authMode, setAuthMode] = useState('login');
   const [authForm, setAuthForm] = useState({ name: '', email: '', password: '' });
@@ -60,6 +63,15 @@ function App() {
   const [isLoadingBoard, setIsLoadingBoard] = useState(false);
   const [cardTitles, setCardTitles] = useState({});
   const [isCreatingCard, setIsCreatingCard] = useState('');
+  const [selectedCardId, setSelectedCardId] = useState('');
+  const [selectedCard, setSelectedCard] = useState(null);
+  const [cardDetailsForm, setCardDetailsForm] = useState({ title: '', description: '', dueDate: '' });
+  const [comments, setComments] = useState([]);
+  const [commentBody, setCommentBody] = useState('');
+  const [cardDetailsError, setCardDetailsError] = useState('');
+  const [isLoadingCardDetails, setIsLoadingCardDetails] = useState(false);
+  const [isSavingCardDetails, setIsSavingCardDetails] = useState(false);
+  const [isAddingComment, setIsAddingComment] = useState(false);
   const [text, setText] = useState('');
   const [messages, setMessages] = useState([]);
 
@@ -132,11 +144,39 @@ function App() {
       moveCardInState(payload.card.id, payload.targetColumnId, payload.position, payload.card);
     }
 
+    function handleCardUpdated(payload) {
+      mergeCardInState(payload.card);
+
+      if (selectedCardIdRef.current === payload.card.id) {
+        setSelectedCard(payload.card);
+        setCardDetailsForm({
+          title: payload.card.title,
+          description: payload.card.description || '',
+          dueDate: payload.card.dueDate || ''
+        });
+      }
+    }
+
+    function handleCommentCreated(payload) {
+      setComments((currentComments) => {
+        if (
+          selectedCardIdRef.current !== payload.cardId ||
+          currentComments.some((comment) => comment.id === payload.comment.id)
+        ) {
+          return currentComments;
+        }
+
+        return [...currentComments, payload.comment];
+      });
+    }
+
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
     socket.on('demo:message', handleMessage);
     socket.on('board:card-created', handleCardCreated);
     socket.on('board:card-moved', handleCardMoved);
+    socket.on('board:card-updated', handleCardUpdated);
+    socket.on('board:comment-created', handleCommentCreated);
 
     return () => {
       socket.off('connect', handleConnect);
@@ -144,6 +184,8 @@ function App() {
       socket.off('demo:message', handleMessage);
       socket.off('board:card-created', handleCardCreated);
       socket.off('board:card-moved', handleCardMoved);
+      socket.off('board:card-updated', handleCardUpdated);
+      socket.off('board:comment-created', handleCommentCreated);
       socket.disconnect();
       socketRef.current = null;
     };
@@ -160,6 +202,10 @@ function App() {
       socketRef.current?.emit('board:leave', selectedBoardId);
     };
   }, [selectedBoardId]);
+
+  useEffect(() => {
+    selectedCardIdRef.current = selectedCardId;
+  }, [selectedCardId]);
 
   function updateAuthForm(field, value) {
     setAuthForm((currentForm) => ({ ...currentForm, [field]: value }));
@@ -206,6 +252,15 @@ function App() {
     });
   }
 
+  function mergeCardInState(updatedCard) {
+    setColumns((currentColumns) =>
+      currentColumns.map((column) => ({
+        ...column,
+        cards: column.cards.map((card) => (card.id === updatedCard.id ? { ...card, ...updatedCard } : card))
+      }))
+    );
+  }
+
   async function loadBoards() {
     setBoardsError('');
     setIsLoadingBoards(true);
@@ -247,6 +302,9 @@ function App() {
 
       setActiveBoard(data.board);
       setColumns(data.columns);
+      setSelectedCardId('');
+      setSelectedCard(null);
+      setComments([]);
     } catch (error) {
       setBoardError(error.message);
     } finally {
@@ -297,6 +355,9 @@ function App() {
     setActiveBoard(null);
     setColumns([]);
     setCardTitles({});
+    setSelectedCardId('');
+    setSelectedCard(null);
+    setComments([]);
     setMessages([]);
   }
 
@@ -409,6 +470,112 @@ function App() {
     } catch (error) {
       setBoardError(error.message);
       openBoard(selectedBoardId);
+    }
+  }
+
+  async function openCard(cardId) {
+    setSelectedCardId(cardId);
+    setSelectedCard(null);
+    setComments([]);
+    setCardDetailsError('');
+    setIsLoadingCardDetails(true);
+
+    try {
+      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}/cards/${cardId}`, {
+        headers: getAuthHeaders()
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Could not load card');
+      }
+
+      setSelectedCard(data.card);
+      setCardDetailsForm({
+        title: data.card.title,
+        description: data.card.description || '',
+        dueDate: data.card.dueDate || ''
+      });
+      setComments(data.comments);
+    } catch (error) {
+      setCardDetailsError(error.message);
+    } finally {
+      setIsLoadingCardDetails(false);
+    }
+  }
+
+  function closeCard() {
+    setSelectedCardId('');
+    setSelectedCard(null);
+    setComments([]);
+    setCommentBody('');
+    setCardDetailsError('');
+  }
+
+  async function handleSaveCardDetails(event) {
+    event.preventDefault();
+
+    if (!selectedCardId) {
+      return;
+    }
+
+    setCardDetailsError('');
+    setIsSavingCardDetails(true);
+
+    try {
+      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}/cards/${selectedCardId}`, {
+        method: 'PATCH',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(cardDetailsForm)
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Could not save card');
+      }
+
+      setSelectedCard(data.card);
+      mergeCardInState(data.card);
+    } catch (error) {
+      setCardDetailsError(error.message);
+    } finally {
+      setIsSavingCardDetails(false);
+    }
+  }
+
+  async function handleAddComment(event) {
+    event.preventDefault();
+    const body = commentBody.trim();
+
+    if (!body || !selectedCardId) {
+      return;
+    }
+
+    setCardDetailsError('');
+    setIsAddingComment(true);
+
+    try {
+      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}/cards/${selectedCardId}/comments`, {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body })
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Could not add comment');
+      }
+
+      setComments((currentComments) =>
+        currentComments.some((comment) => comment.id === data.comment.id)
+          ? currentComments
+          : [...currentComments, data.comment]
+      );
+      setCommentBody('');
+    } catch (error) {
+      setCardDetailsError(error.message);
+    } finally {
+      setIsAddingComment(false);
     }
   }
 
@@ -603,7 +770,9 @@ function App() {
                           {column.cards.length === 0 ? (
                             <p className="column-empty">اسحب بطاقة إلى هنا.</p>
                           ) : (
-                            column.cards.map((card) => <DraggableCard key={card.id} card={card} />)
+                            column.cards.map((card) => (
+                              <DraggableCard key={card.id} card={card} onOpen={openCard} />
+                            ))
                           )}
                         </div>
 
@@ -627,6 +796,105 @@ function App() {
                   </div>
                 </DndContext>
               )}
+
+              {selectedCardId ? (
+                <aside className="card-details" aria-label="Card details">
+                  <div className="card-details-header">
+                    <div>
+                      <p className="eyebrow">Card</p>
+                      <h3>{selectedCard?.title || 'جاري فتح البطاقة...'}</h3>
+                    </div>
+                    <button type="button" className="secondary-button" onClick={closeCard}>
+                      إغلاق
+                    </button>
+                  </div>
+
+                  {cardDetailsError ? <p className="form-error">{cardDetailsError}</p> : null}
+
+                  {isLoadingCardDetails ? (
+                    <p className="empty-state">جاري تحميل تفاصيل البطاقة...</p>
+                  ) : selectedCard ? (
+                    <>
+                      <form className="details-form" onSubmit={handleSaveCardDetails}>
+                        <label>
+                          عنوان البطاقة
+                          <input
+                            value={cardDetailsForm.title}
+                            onChange={(event) =>
+                              setCardDetailsForm((currentForm) => ({
+                                ...currentForm,
+                                title: event.target.value
+                              }))
+                            }
+                            placeholder="عنوان البطاقة"
+                          />
+                        </label>
+                        <label>
+                          الوصف
+                          <textarea
+                            value={cardDetailsForm.description}
+                            onChange={(event) =>
+                              setCardDetailsForm((currentForm) => ({
+                                ...currentForm,
+                                description: event.target.value
+                              }))
+                            }
+                            placeholder="اكتب وصف المهمة"
+                            rows="4"
+                          />
+                        </label>
+                        <label>
+                          تاريخ الاستحقاق
+                          <input
+                            type="date"
+                            value={cardDetailsForm.dueDate}
+                            onChange={(event) =>
+                              setCardDetailsForm((currentForm) => ({
+                                ...currentForm,
+                                dueDate: event.target.value
+                              }))
+                            }
+                          />
+                        </label>
+                        <button type="submit" disabled={isSavingCardDetails}>
+                          {isSavingCardDetails ? 'جاري الحفظ...' : 'حفظ التفاصيل'}
+                        </button>
+                      </form>
+
+                      <section className="comments-panel" aria-label="Card comments">
+                        <h3>التعليقات</h3>
+                        <form className="comment-form" onSubmit={handleAddComment}>
+                          <textarea
+                            value={commentBody}
+                            onChange={(event) => setCommentBody(event.target.value)}
+                            placeholder="اكتب تعليقاً"
+                            rows="3"
+                          />
+                          <button type="submit" disabled={isAddingComment}>
+                            {isAddingComment ? 'جاري الإضافة...' : 'إضافة تعليق'}
+                          </button>
+                        </form>
+
+                        <div className="comments-list">
+                          {comments.length === 0 ? (
+                            <p className="column-empty">لا توجد تعليقات بعد.</p>
+                          ) : (
+                            comments.map((comment) => (
+                              <article key={comment.id} className="comment-card">
+                                <strong>{comment.authorName}</strong>
+                                <p>{comment.body}</p>
+                                <time dateTime={comment.createdAt}>
+                                  {new Date(comment.createdAt).toLocaleString('ar')}
+                                </time>
+                              </article>
+                            ))
+                          )}
+                        </div>
+                      </section>
+                    </>
+                  ) : null}
+                </aside>
+              ) : null}
             </section>
           ) : null}
 

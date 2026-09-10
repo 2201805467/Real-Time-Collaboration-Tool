@@ -102,6 +102,48 @@ function getBoardForUser(boardId, userId) {
     .get(boardId, userId);
 }
 
+function getCardForBoard(cardId, boardId) {
+  return db
+    .prepare(`
+      SELECT
+        cards.id,
+        cards.column_id AS columnId,
+        cards.title,
+        cards.description,
+        cards.assignee_id AS assigneeId,
+        cards.due_date AS dueDate,
+        cards.position,
+        cards.version,
+        cards.created_at AS createdAt,
+        cards.updated_at AS updatedAt
+      FROM cards
+      INNER JOIN board_columns ON board_columns.id = cards.column_id
+      WHERE cards.id = ?
+        AND board_columns.board_id = ?
+        AND cards.deleted_at IS NULL
+    `)
+    .get(cardId, boardId);
+}
+
+function getCommentsForCard(cardId) {
+  return db
+    .prepare(`
+      SELECT
+        comments.id,
+        comments.card_id AS cardId,
+        comments.user_id AS userId,
+        users.name AS authorName,
+        comments.body,
+        comments.created_at AS createdAt,
+        comments.updated_at AS updatedAt
+      FROM comments
+      INNER JOIN users ON users.id = comments.user_id
+      WHERE comments.card_id = ?
+      ORDER BY comments.created_at ASC
+    `)
+    .all(cardId);
+}
+
 app.get('/api/boards', requireAuth, (req, res) => {
   const boards = db
     .prepare(`
@@ -377,6 +419,100 @@ app.patch('/api/boards/:boardId/cards/:cardId/move', requireAuth, (req, res) => 
   });
 
   res.json({ card: movedCard });
+});
+
+app.get('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+
+  if (!board) {
+    return res.status(404).json({ message: 'Board not found' });
+  }
+
+  const card = getCardForBoard(req.params.cardId, board.id);
+
+  if (!card) {
+    return res.status(404).json({ message: 'Card not found' });
+  }
+
+  res.json({
+    card,
+    comments: getCommentsForCard(card.id)
+  });
+});
+
+app.patch('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+
+  if (!board) {
+    return res.status(404).json({ message: 'Board not found' });
+  }
+
+  const existingCard = getCardForBoard(req.params.cardId, board.id);
+
+  if (!existingCard) {
+    return res.status(404).json({ message: 'Card not found' });
+  }
+
+  const title = String(req.body.title ?? existingCard.title).trim();
+  const description = String(req.body.description ?? existingCard.description ?? '').trim();
+  const dueDateInput = String(req.body.dueDate ?? '').trim();
+  const dueDate = dueDateInput || null;
+
+  if (!title) {
+    return res.status(400).json({ message: 'Card title is required' });
+  }
+
+  db.prepare(`
+    UPDATE cards
+    SET title = ?, description = ?, due_date = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(title, description, dueDate, existingCard.id);
+  db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+
+  const card = getCardForBoard(existingCard.id, board.id);
+
+  io.to(`board:${board.id}`).emit('board:card-updated', {
+    boardId: board.id,
+    card
+  });
+
+  res.json({ card });
+});
+
+app.post('/api/boards/:boardId/cards/:cardId/comments', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+
+  if (!board) {
+    return res.status(404).json({ message: 'Board not found' });
+  }
+
+  const card = getCardForBoard(req.params.cardId, board.id);
+
+  if (!card) {
+    return res.status(404).json({ message: 'Card not found' });
+  }
+
+  const body = String(req.body.body || '').trim();
+
+  if (!body) {
+    return res.status(400).json({ message: 'Comment body is required' });
+  }
+
+  const commentId = randomUUID();
+
+  db.prepare('INSERT INTO comments (id, card_id, user_id, body) VALUES (?, ?, ?, ?)')
+    .run(commentId, card.id, req.user.id, body);
+  db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+
+  const comment = getCommentsForCard(card.id).find((item) => item.id === commentId);
+
+  io.to(`board:${board.id}`).emit('board:comment-created', {
+    boardId: board.id,
+    cardId: card.id,
+    comment
+  });
+
+  res.status(201).json({ comment });
 });
 
 io.on('connection', (socket) => {
