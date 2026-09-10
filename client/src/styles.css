@@ -122,9 +122,37 @@ h1 {
 
 .message-form {
   display: grid;
-  grid-template-columns: minmax(150px, 0.8fr) minmax(220px, 1.4fr) auto;
+  grid-template-columns: minmax(220px, 1fr) auto;
   gap: 14px;
   align-items: end;
+}
+
+.auth-panel {
+  max-width: 520px;
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 4px;
+  border-radius: 8px;
+  background: #e8eef1;
+}
+
+.tab {
+  color: #41515c;
+  background: transparent;
+}
+
+.tab.active {
+  color: #ffffff;
+  background: #1f7a8c;
+}
+
+.auth-form {
+  display: grid;
+  gap: 14px;
 }
 
 label {
@@ -170,6 +198,36 @@ button {
 button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.form-error {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid #f0b8b8;
+  border-radius: 8px;
+  color: #8a1f1f;
+  background: #fff1f1;
+  line-height: 1.5;
+}
+
+.session-bar {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #d9e1e5;
+}
+
+.session-bar p {
+  margin: 6px 0 0;
+  color: #687781;
+  line-height: 1.5;
+}
+
+.secondary-button {
+  color: #1f7a8c;
+  background: #e2f3f6;
 }
 
 .messages {
@@ -223,5 +281,10 @@ button:disabled {
   .app-shell {
     align-content: start;
     padding-top: 36px;
+  }
+
+  .session-bar {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
