@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+
+<html dir="rtl" lang="ar"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+          "on-secondary-fixed-variant": "#005236",
+          "on-primary-container": "#dad7ff",
+          "inverse-on-surface": "#eef0ff",
+          "surface-container-low": "#f2f3ff",
+          "surface-container-lowest": "#ffffff",
+          "surface-container-high": "#e2e7ff",
+          "primary-fixed-dim": "#c3c0ff",
+          "on-secondary-container": "#00714d",
+          "secondary-fixed-dim": "#4edea3",
+          "on-surface-variant": "#464555",
+          "primary-container": "#4f46e5",
+          "on-tertiary-fixed": "#3e0022",
+          "on-primary-fixed-variant": "#3323cc",
+          "surface-dim": "#d2d9f4",
+          "on-primary-fixed": "#0f0069",
+          "on-tertiary-fixed-variant": "#8c0053",
+          "on-secondary-fixed": "#002113",
+          "on-background": "#131b2e",
+          "outline-variant": "#c7c4d8",
+          "on-surface": "#131b2e",
+          "inverse-surface": "#283044",
+          "secondary": "#006c49",
+          "on-primary": "#ffffff",
+          "primary": "#3525cd",
+          "on-error": "#ffffff",
+          "tertiary-container": "#b6166f",
+          "surface-tint": "#4d44e3",
+          "on-error-container": "#93000a",
+          "secondary-fixed": "#6ffbbe",
+          "tertiary": "#8f0055",
+          "surface-container-highest": "#dae2fd",
+          "error-container": "#ffdad6",
+          "on-tertiary-container": "#ffcede",
+          "surface": "#faf8ff",
+          "on-secondary": "#ffffff",
+          "inverse-primary": "#c3c0ff",
+          "on-tertiary": "#ffffff",
+          "error": "#ba1a1a",
+          "surface-variant": "#dae2fd",
+          "background": "#faf8ff",
+          "outline": "#777587",
+          "primary-fixed": "#e2dfff",
+          "secondary-container": "#6cf8bb",
+          "surface-container": "#eaedff",
+          "surface-bright": "#faf8ff",
+          "tertiary-fixed": "#ffd9e4",
+          "tertiary-fixed-dim": "#ffb0cd"
+        },
+        "borderRadius": {
+          "DEFAULT": "0.25rem",
+          "lg": "0.5rem",
+          "xl": "0.75rem",
+          "full": "9999px"
+        },
+        "spacing": {
+          "margin-mobile": "1rem",
+          "margin": "1.5rem",
+          "space-sm": "0.5rem",
+          "gutter-sm": "0.5rem",
+          "space-lg": "1rem",
+          "space-xs": "0.25rem",
+          "gutter-lg": "1.5rem",
+          "space-2xl": "2rem",
+          "gutter": "1rem",
+          "space-md": "0.75rem",
+          "space-xl": "1.5rem"
+        },
+        "fontFamily": {
+          "headline-md": [
+            "IBM Plex Sans"
+          ],
+          "body-md": [
+            "IBM Plex Sans"
+          ],
+          "body-lg": [
+            "IBM Plex Sans"
+          ],
+          "label-md": [
+            "IBM Plex Sans"
+          ],
+          "label-sm": [
+            "IBM Plex Sans"
+          ],
+          "headline-lg": [
+            "IBM Plex Sans"
+          ],
+          "body-sm": [
+            "IBM Plex Sans"
+          ],
+          "headline-sm": [
+            "IBM Plex Sans"
+          ],
+          "display-lg-mobile": [
+            "IBM Plex Sans"
+          ],
+          "display-lg": [
+            "IBM Plex Sans"
+          ],
+          "code-sm": [
+            "JetBrains Mono"
+          ]
+        },
+        "fontSize": {
+          "headline-md": [
+            "20px",
+            {
+              "lineHeight": "30px",
+              "letterSpacing": "-0.01em",
+              "fontWeight": "600"
+            }
+          ],
+          "body-md": [
+            "14px",
+            {
+              "lineHeight": "22px",
+              "fontWeight": "400"
+            }
+          ],
+          "body-lg": [
+            "16px",
+            {
+              "lineHeight": "26px",
+              "fontWeight": "400"
+            }
+          ],
+          "label-md": [
+            "12px",
+            {
+              "lineHeight": "16px",
+              "letterSpacing": "0.01em",
+              "fontWeight": "500"
+            }
+          ],
+          "label-sm": [
+            "11px",
+            {
+              "lineHeight": "14px",
+              "letterSpacing": "0.02em",
+              "fontWeight": "600"
+            }
+          ],
+          "headline-lg": [
+            "24px",
+            {
+              "lineHeight": "34px",
+              "letterSpacing": "-0.015em",
+              "fontWeight": "600"
+            }
+          ],
+          "body-sm": [
+            "13px",
+            {
+              "lineHeight": "20px",
+              "fontWeight": "400"
+            }
+          ],
+          "headline-sm": [
+            "16px",
+            {
+              "lineHeight": "24px",
+              "fontWeight": "600"
+            }
+          ],
+          "display-lg-mobile": [
+            "28px",
+            {
+              "lineHeight": "38px",
+              "letterSpacing": "-0.01em",
+              "fontWeight": "700"
+            }
+          ],
+          "display-lg": [
+            "36px",
+            {
+              "lineHeight": "48px",
+              "letterSpacing": "-0.02em",
+              "fontWeight": "700"
+            }
+          ],
+          "code-sm": [
+            "12px",
+            {
+              "lineHeight": "18px",
+              "fontWeight": "400"
+            }
+          ]
+        }
+      },
+    },
+  }</script></head><body class="bg-surface font-body-md text-body-md text-on-surface antialiased"><aside class="fixed right-0 top-0 h-full w-64 bg-surface-container-low shadow-[0_1px_8px_rgba(0,0,0,0.04)] z-50 flex flex-col justify-between select-none"><div class="flex flex-col"><div class="h-16 px-space-md flex items-center justify-between"><div class="flex items-center gap-space-sm"><img alt="شعار منصة تدفق | Tadafuq Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAFKt8axh6PJehwQKAbil5FFeqjaHzOFrqv8UD5BeErabtpRfLaK6W_UQOc7llXtyaTIZFzxlgRJfe0PA8yDKxu-uwkA0d5JwFtdxmursMPnUjw1edEGd9ewt4QSXbIKjCF0BLEuQnymovikYU6iRHEpnHEM-Ab9UOjwoLuANuT0ShBCCcegQgVARXUu3gV8V7veJEWxhT3Ouj3tsRbjh42EMjFBJ5UQtdCeodiW60XV0nib2vbrOqS"/><div class="flex flex-col"><span class="font-headline-sm text-headline-sm text-on-surface tracking-tight leading-none">تدفق</span><span class="font-label-sm text-label-sm text-on-surface-variant font-code-sm">Tadafuq Cloud</span></div></div><button aria-label="طي القائمة" class="flex items-center justify-center w-8 h-8 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">dock_to_right</span></button></div><div class="px-space-md py-space-xs"><button class="w-full flex items-center justify-between p-space-sm rounded-lg bg-surface-container-lowest shadow-[0_1px_8px_rgba(0,0,0,0.04)] hover:bg-surface-container transition-colors text-start" type="button"><div class="flex items-center gap-space-sm overflow-hidden"><div class="w-7 h-7 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center flex-shrink-0 font-label-md text-label-md">م</div><div class="truncate"><p class="font-label-md text-label-md text-on-surface truncate">مساحة الابتكار التقني</p><p class="font-label-sm text-label-sm text-on-surface-variant">خطة الفرق الاحترافية</p></div></div><span class="material-symbols-outlined text-[18px] text-on-surface-variant">unfold_more</span></button></div><div class="px-space-md mt-space-md mb-space-xs"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider font-semibold">سير العمل والمشاريع</span></div><nav class="px-space-md flex flex-col gap-space-xs" data-active-classes="bg-primary-container text-on-primary-container font-semibold"><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="kanban-board" href="#"><span class="material-symbols-outlined text-[20px]">view_kanban</span><span class="font-body-sm text-body-sm">لوحة الكانبان</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="workspace-projects" href="#"><span class="material-symbols-outlined text-[20px]">folder_supervised</span><span class="font-body-sm text-body-sm">نظرة عامة والمشاريع</span></a><a aria-current="page" class="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg transition-all bg-primary-container text-on-primary-container font-semibold" data-path="team-presence" href="#"><span class="material-symbols-outlined text-[20px]">group_work</span><span class="font-body-sm text-body-sm">إدارة الفريق والصلاحيات</span><span class="mr-auto px-space-xs py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-label-sm">6 نشط</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="task-details" href="#"><span class="material-symbols-outlined text-[20px]">task_alt</span><span class="font-body-sm text-body-sm">تفاصيل المهمة والنشاط</span></a></nav></div><div class="flex flex-col p-space-md gap-space-sm"><div class="p-space-sm rounded-xl bg-surface-container-lowest shadow-[0_1px_8px_rgba(0,0,0,0.04)] flex flex-col gap-space-xs"><div class="flex items-center justify-between font-label-sm text-label-sm"><span class="text-on-surface-variant">المساحة السحابية</span><span class="font-semibold text-on-surface">78%</span></div><div class="w-full h-1.5 bg-surface-container rounded-full overflow-hidden"><div class="h-full bg-primary-container rounded-full w-[78%]"></div></div><div class="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant"><span>15.6 جيجابايت / 20 جيجابايت</span></div></div><div class="flex flex-col gap-space-xs"><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" href="#"><span class="material-symbols-outlined text-[20px]">settings</span><span class="font-body-sm text-body-sm">الإعدادات العامة</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" href="#"><span class="material-symbols-outlined text-[20px]">support_agent</span><span class="font-body-sm text-body-sm">الدعم الفني والتوثيق</span></a><div class="flex items-center justify-between px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[20px]">dark_mode</span><span class="font-body-sm text-body-sm">الوضع المظلم</span></div><div class="w-8 h-4 rounded-full bg-surface-container-high relative p-0.5 flex items-center justify-start cursor-pointer"><div class="w-3 h-3 rounded-full bg-surface shadow-[0_1px_8px_rgba(0,0,0,0.04)]"></div></div></div></div></div></aside><div class="pr-64"><header class="fixed top-0 left-0 right-64 h-16 bg-surface/85 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] z-40 flex items-center justify-between px-space-lg select-none"><div class="flex items-center gap-space-md"><div class="flex items-center gap-space-xs font-body-sm text-body-sm text-on-surface-variant"><span class="hover:text-on-surface cursor-pointer">المشاريع البرمجية</span><span class="material-symbols-outlined text-[16px] rtl:rotate-180">chevron_right</span><span class="text-on-surface font-headline-sm text-headline-sm">تطوير تطبيق تدفق V2.0</span></div><div class="inline-flex items-center gap-space-xs px-space-sm py-1 rounded-full bg-surface-container-low text-on-secondary-container"><span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary-fixed-dim opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-secondary"></span></span><span class="font-label-sm text-label-sm font-medium">مزامنة فورية</span></div></div><div class="flex items-center gap-space-md"><div class="flex items-center pl-space-sm"><div class="flex items-center -space-x-2 space-x-reverse"><div class="relative group cursor-pointer"><div class="w-8 h-8 rounded-full bg-primary-container text-on-primary font-label-md text-label-md flex items-center justify-center ring-2 ring-surface">س</div><span class="absolute -bottom-0.5 -left-0.5 w-2.5 h-2.5 rounded-full bg-secondary ring-2 ring-surface"></span></div><div class="relative group cursor-pointer"><div class="w-8 h-8 rounded-full bg-tertiary-container text-on-tertiary font-label-md text-label-md flex items-center justify-center ring-2 ring-surface">ع</div><span class="absolute -bottom-0.5 -left-0.5 w-2.5 h-2.5 rounded-full bg-secondary ring-2 ring-surface"></span></div><div class="relative group cursor-pointer"><div class="w-8 h-8 rounded-full bg-surface-container-highest text-on-surface font-label-md text-label-md flex items-center justify-center ring-2 ring-surface">ن</div><span class="absolute -bottom-0.5 -left-0.5 w-2.5 h-2.5 rounded-full bg-secondary ring-2 ring-surface"></span></div><div class="w-8 h-8 rounded-full bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm flex items-center justify-center ring-2 ring-surface">+3</div></div><div class="mr-space-xs flex items-center gap-1 bg-surface-container px-space-xs py-0.5 rounded-full font-label-sm text-label-sm text-secondary font-medium"><span class="w-1.5 h-1.5 rounded-full bg-secondary"></span><span>متصل الآن</span></div></div><div class="flex items-center gap-space-xs"><button class="flex items-center gap-space-xs px-space-sm py-1.5 rounded-lg bg-surface-container-low text-on-surface hover:bg-surface-container-high transition-colors font-body-sm text-body-sm" type="button"><span class="material-symbols-outlined text-[18px]">filter_list</span><span>تصفية</span></button><button class="flex items-center gap-space-xs px-space-sm py-1.5 rounded-lg bg-surface-container-low text-on-surface hover:bg-surface-container-high transition-colors font-body-sm text-body-sm" type="button"><span class="material-symbols-outlined text-[18px]">link</span><span>مشاركة</span></button><button class="flex items-center gap-space-xs px-space-md py-1.5 rounded-lg bg-primary text-on-primary hover:bg-primary-container hover:text-on-primary transition-colors font-body-sm text-body-sm font-semibold" type="button"><span class="material-symbols-outlined text-[18px]">person_add</span><span>دعوة عضو +</span></button></div><button aria-label="الإشعارات والتنبيهات" class="relative flex items-center justify-center w-9 h-9 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" type="button"><span class="material-symbols-outlined text-[22px]">notifications</span><span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-error ring-2 ring-surface"></span></button><div class="flex items-center gap-space-xs pr-space-xs cursor-pointer"><div class="relative"><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuATmWJN4Hd5Aa7SElR9B8oAIFnjdLzpBqmHOC-MVNlqNEKusTabVIWXo9jjxNOETaMssMhGL0NI9upZ9OwxSKo-_n3TMc0K-d_cu4wnw0PMzqCRR-ECEf-4w4wpqp5k8KjHOd6i9crpVgfLCve4qqbIokAbIkhVQDkm_GY8Lm9FW8PWh6K1dx24ClCk8YmLO9m9gX3dSEjXEzSEOZxb5cieZa37sBZMSDwAC3OWQZzLn7fKHb8sQtY9"/><span class="absolute bottom-0 left-0 w-2.5 h-2.5 rounded-full bg-secondary ring-2 ring-surface"></span></div><span class="material-symbols-outlined text-[18px] text-on-surface-variant">expand_more</span></div></div></header><main class="relative pt-16 w-full min-h-screen bg-surface"><div class="flex flex-col w-full">
+<div class="p-space-xl flex flex-col gap-space-xl">
+<!-- Top Action & Presence Metrics Row -->
+<div class="flex flex-col xl:flex-row xl:items-center justify-between gap-space-lg">
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center gap-space-xs text-on-surface-variant font-body-sm text-body-sm">
+<span>فضاء عمل تدفق السحابي</span>
+<span class="material-symbols-outlined text-[16px] rtl:rotate-180">chevron_left</span>
+<span class="text-primary font-semibold">التواجد الحي والأدوار</span>
+</div>
+<h1 class="font-headline-lg text-headline-lg text-on-surface tracking-tight">إدارة الفريق والأعضاء المتصلين</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant">تحكم لحظي في نشاط الكوادر التقنية، مشاركة الشاشات الحية، وتوزيع صلاحيات الحوكمة السحابية.</p>
+</div>
+<!-- Action CTA Hub -->
+<div class="flex flex-wrap items-center gap-space-sm">
+<button class="flex items-center gap-space-xs px-space-md py-2.5 rounded-xl bg-surface-container-low text-on-surface hover:bg-surface-container-high transition-colors font-body-sm text-body-sm shadow-sm" type="button">
+<span class="material-symbols-outlined text-[18px]">cloud_download</span>
+<span>تصدير سجل التواجد</span>
+</button>
+<button class="flex items-center gap-space-xs px-space-md py-2.5 rounded-xl bg-surface-container-high text-primary hover:bg-surface-container-highest transition-colors font-body-sm text-body-sm font-semibold shadow-sm" type="button">
+<span class="material-symbols-outlined text-[18px]">security</span>
+<span>مصفوفة الأدوار (RBAC)</span>
+</button>
+<button class="flex items-center gap-space-xs px-space-lg py-2.5 rounded-xl bg-primary text-on-primary hover:bg-primary-container transition-all font-body-sm text-body-sm font-semibold shadow-md active:scale-95" type="button">
+<span class="material-symbols-outlined text-[20px]">person_add</span>
+<span>دعوة عضو جديد +</span>
+</button>
+</div>
+</div>
+<!-- Live Statistics Bento Stream -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-space-md">
+<!-- Total Members -->
+<div class="p-space-lg rounded-2xl bg-surface-container-lowest shadow-sm flex flex-col justify-between relative overflow-hidden group hover:shadow-md transition-shadow">
+<div class="flex items-start justify-between">
+<div class="flex flex-col gap-0.5">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">إجمالي الفريق</span>
+<span class="font-display-lg text-display-lg text-on-surface mt-1 font-bold">36</span>
+</div>
+<div class="w-12 h-12 rounded-xl bg-surface-container-high text-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-[26px]">groups</span>
+</div>
+</div>
+<div class="flex items-center gap-space-xs mt-space-md pt-space-xs">
+<span class="text-secondary font-semibold font-label-md text-label-md">+4 انضموا حديثاً</span>
+<span class="text-on-surface-variant font-label-sm text-label-sm">خلال الأسبوع الأخير</span>
+</div>
+<div class="absolute bottom-0 inset-x-0 h-1 bg-surface-container"></div>
+</div>
+<!-- Active Right Now -->
+<div class="p-space-lg rounded-2xl bg-surface-container-lowest shadow-sm flex flex-col justify-between relative overflow-hidden group hover:shadow-md transition-shadow">
+<div class="flex items-start justify-between">
+<div class="flex flex-col gap-0.5">
+<div class="flex items-center gap-1.5">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">نشط الآن</span>
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-secondary"></span>
+</span>
+</div>
+<span class="font-display-lg text-display-lg text-secondary mt-1 font-bold">18</span>
+</div>
+<div class="w-12 h-12 rounded-xl bg-secondary-container text-on-secondary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-[26px]">bolt</span>
+</div>
+</div>
+<div class="flex items-center gap-space-xs mt-space-md pt-space-xs">
+<span class="text-on-surface-variant font-label-sm text-label-sm">معدل تزامن فوري</span>
+<span class="text-secondary font-code-sm font-semibold">50% من القوة العاملة</span>
+</div>
+<div class="absolute bottom-0 inset-x-0 h-1 bg-secondary"></div>
+</div>
+<!-- In Meetings -->
+<div class="p-space-lg rounded-2xl bg-surface-container-lowest shadow-sm flex flex-col justify-between relative overflow-hidden group hover:shadow-md transition-shadow">
+<div class="flex items-start justify-between">
+<div class="flex flex-col gap-0.5">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">في غرف المحادثة</span>
+<span class="font-display-lg text-display-lg text-primary mt-1 font-bold">5</span>
+</div>
+<div class="w-12 h-12 rounded-xl bg-primary-fixed text-on-primary-fixed-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-[26px]">video_chat</span>
+</div>
+</div>
+<div class="flex items-center gap-space-xs mt-space-md pt-space-xs">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+<span class="text-on-surface-variant font-label-sm text-label-sm">جلسة تخطيط السبرنت الجاري</span>
+</div>
+<div class="absolute bottom-0 inset-x-0 h-1 bg-primary"></div>
+</div>
+<!-- Offline -->
+<div class="p-space-lg rounded-2xl bg-surface-container-lowest shadow-sm flex flex-col justify-between relative overflow-hidden group hover:shadow-md transition-shadow">
+<div class="flex items-start justify-between">
+<div class="flex flex-col gap-0.5">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">غير متصل</span>
+<span class="font-display-lg text-display-lg text-outline mt-1 font-bold">13</span>
+</div>
+<div class="w-12 h-12 rounded-xl bg-surface-container-low text-on-surface-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-[26px]">bedtime</span>
+</div>
+</div>
+<div class="flex items-center gap-space-xs mt-space-md pt-space-xs">
+<span class="text-on-surface-variant font-label-sm text-label-sm">آخر تسجيل خروج: منذ 24 دقيقة</span>
+</div>
+<div class="absolute bottom-0 inset-x-0 h-1 bg-surface-container-high"></div>
+</div>
+</div>
+<!-- Live Activity Radar & Real-Time Collaborating Lanes -->
+<div class="p-space-lg rounded-2xl bg-surface-container-lowest shadow-sm flex flex-col gap-space-md">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-space-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded-xl bg-secondary-container text-on-secondary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">radar</span>
+</div>
+<div>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">رادار الحضور التشاركي المباشر (Multiplayer Radar)</h2>
+<p class="font-label-sm text-label-sm text-on-surface-variant">تتبع مساحات العمل والمشاريع التي تشهد تفاعلاً برمجياً وتصميماً حياً في هذه الثانية</p>
+</div>
+</div>
+<div class="flex items-center gap-space-xs self-start sm:self-auto bg-surface-container-low px-space-md py-1.5 rounded-full font-code-sm text-code-sm text-on-surface-variant">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+<span>WebSocket v2.8 (64 fps Live-Streams)</span>
+</div>
+</div>
+<!-- Active Boards Strips -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-space-md pt-space-xs">
+<!-- Board 1 -->
+<div class="p-space-md rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors flex flex-col justify-between gap-space-sm">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-primary text-[18px]">view_kanban</span>
+<span class="font-headline-sm text-headline-sm text-on-surface text-[14px]">لوحة كانبان | تطوير V2.0</span>
+</div>
+<span class="px-space-xs py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-label-sm">8 متواجدون</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-1">يعملون على مهام: مصادقة OAuth2، وبوابة دفع مدى</p>
+<div class="flex items-center justify-between pt-space-xs">
+<div class="flex items-center -space-x-2 space-x-reverse">
+<div class="w-7 h-7 rounded-full bg-primary text-on-primary font-label-sm text-label-sm flex items-center justify-center shadow-sm">ر</div>
+<div class="w-7 h-7 rounded-full bg-secondary text-on-secondary font-label-sm text-label-sm flex items-center justify-center shadow-sm">س</div>
+<div class="w-7 h-7 rounded-full bg-tertiary text-on-tertiary font-label-sm text-label-sm flex items-center justify-center shadow-sm">م</div>
+<div class="w-7 h-7 rounded-full bg-surface-container-highest text-on-surface font-label-sm text-label-sm flex items-center justify-center shadow-sm">+5</div>
+</div>
+<span class="text-primary font-label-sm text-label-sm font-semibold flex items-center gap-0.5 hover:underline cursor-pointer">
+              انضم للوحة
+              <span class="material-symbols-outlined text-[14px] rtl:rotate-180">arrow_forward</span>
+</span>
+</div>
+</div>
+<!-- Board 2 -->
+<div class="p-space-md rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors flex flex-col justify-between gap-space-sm">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-tertiary text-[18px]">draw</span>
+<span class="font-headline-sm text-headline-sm text-on-surface text-[14px]">لوحة التصميم التفاعلي | UI Kit</span>
+</div>
+<span class="px-space-xs py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant font-label-sm text-label-sm">6 متواجدون</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-1">مراجعة نماذج RTL وشبكة التباين العالي</p>
+<div class="flex items-center justify-between pt-space-xs">
+<div class="flex items-center -space-x-2 space-x-reverse">
+<div class="w-7 h-7 rounded-full bg-tertiary-container text-on-tertiary font-label-sm text-label-sm flex items-center justify-center shadow-sm">ن</div>
+<div class="w-7 h-7 rounded-full bg-primary-container text-on-primary font-label-sm text-label-sm flex items-center justify-center shadow-sm">خ</div>
+<div class="w-7 h-7 rounded-full bg-surface-container-highest text-on-surface font-label-sm text-label-sm flex items-center justify-center shadow-sm">+4</div>
+</div>
+<span class="text-primary font-label-sm text-label-sm font-semibold flex items-center gap-0.5 hover:underline cursor-pointer">
+              انضم للوحة
+              <span class="material-symbols-outlined text-[14px] rtl:rotate-180">arrow_forward</span>
+</span>
+</div>
+</div>
+<!-- Board 3 -->
+<div class="p-space-md rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors flex flex-col justify-between gap-space-sm">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-secondary text-[18px]">terminal</span>
+<span class="font-headline-sm text-headline-sm text-on-surface text-[14px]">سبرنت خوادم API و Kubernetes</span>
+</div>
+<span class="px-space-xs py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-label-sm">4 متواجدون</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-1">اختبار سرعة توزيع الحمل في منطقة الرياض السحابية</p>
+<div class="flex items-center justify-between pt-space-xs">
+<div class="flex items-center -space-x-2 space-x-reverse">
+<div class="w-7 h-7 rounded-full bg-secondary text-on-secondary font-label-sm text-label-sm flex items-center justify-center shadow-sm">ف</div>
+<div class="w-7 h-7 rounded-full bg-primary text-on-primary font-label-sm text-label-sm flex items-center justify-center shadow-sm">ع</div>
+<div class="w-7 h-7 rounded-full bg-surface-container-highest text-on-surface font-label-sm text-label-sm flex items-center justify-center shadow-sm">+2</div>
+</div>
+<span class="text-primary font-label-sm text-label-sm font-semibold flex items-center gap-0.5 hover:underline cursor-pointer">
+              انضم للوحة
+              <span class="material-symbols-outlined text-[14px] rtl:rotate-180">arrow_forward</span>
+</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Filters, Search & Bulk Operations -->
+<div class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-space-md">
+<!-- Search Input -->
+<div class="relative flex-1 max-w-md">
+<span class="material-symbols-outlined absolute right-space-md top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
+<input class="w-full bg-surface-container-lowest rounded-xl pr-10 pl-space-md py-2.5 text-body-md text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:bg-surface-container-lowest shadow-sm" placeholder="بحث بالاسم، البريد الإلكتروني، أو المسمى الوظيفي..." type="text"/>
+</div>
+<!-- Quick Filter Pills -->
+<div class="flex items-center gap-space-xs overflow-x-auto pb-1 md:pb-0">
+<button class="px-space-md py-1.5 rounded-full bg-primary text-on-primary font-label-md text-label-md font-semibold whitespace-nowrap shadow-sm" type="button">الكل (36)</button>
+<button class="px-space-md py-1.5 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface-variant font-label-md text-label-md whitespace-nowrap transition-colors" type="button">المتصلون الآن (18)</button>
+<button class="px-space-md py-1.5 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface-variant font-label-md text-label-md whitespace-nowrap transition-colors" type="button">المدراء والمسؤولون (6)</button>
+<button class="px-space-md py-1.5 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface-variant font-label-md text-label-md whitespace-nowrap transition-colors" type="button">المهندسون (18)</button>
+<button class="px-space-md py-1.5 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface-variant font-label-md text-label-md whitespace-nowrap transition-colors" type="button">المصممون (12)</button>
+</div>
+</div>
+<!-- Team Members Table / High-Density Grid Container -->
+<div class="bg-surface-container-lowest rounded-2xl shadow-sm overflow-hidden flex flex-col">
+<!-- Table Header -->
+<div class="grid grid-cols-12 px-space-lg py-space-md bg-surface-container-low font-label-sm text-label-sm text-on-surface-variant font-semibold">
+<div class="col-span-12 lg:col-span-4 flex items-center gap-space-sm">
+<input class="w-4 h-4 rounded text-primary focus:ring-0 cursor-pointer" type="checkbox"/>
+<span>العضو والمعلومات</span>
+</div>
+<div class="hidden lg:grid col-span-3">الحالة اللحظية ومؤشر النشاط</div>
+<div class="hidden lg:grid col-span-2">الدور والصلاحيات</div>
+<div class="hidden lg:grid col-span-2">اللوحة الحالية وآخر ظهور</div>
+<div class="hidden lg:grid col-span-1 text-center">إجراءات</div>
+</div>
+<!-- Member Row 1: Active Leader -->
+<div class="grid grid-cols-12 px-space-lg py-space-md hover:bg-surface-container-low/60 transition-colors items-center gap-y-space-sm">
+<div class="col-span-12 lg:col-span-4 flex items-center gap-space-md">
+<input class="w-4 h-4 rounded text-primary focus:ring-0 cursor-pointer" type="checkbox"/>
+<div class="relative">
+<img class="w-10 h-10 rounded-full object-cover" data-alt="Close up modern studio portrait of an Arab tech lead wearing glasses in professional workspace with clean violet and emerald lighting accent" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCcS7zZq5qdEncc2D97sKFNUsFG1FZE9hspUdIZau6r6WRPc1SLaDs3PNzQ0d1xpfmRZiYk5IUR6Mgn_She-z9lI_kbs8QcGohSwuoeHDvSAvFkwo85wRyaxdfWelI5HMzB3DV88HskIKeomXdkthhfvWBdkATfmQsmbhHfINElieYr1c6xVhypi6WLSOSQV3PdrCT5pVV33YY4lj8c44Hvyvt4XvXb-AkEHq6ELHr7z4WTF_jCq0B_"/>
+<span class="absolute bottom-0 left-0 w-3 h-3 rounded-full bg-secondary shadow-sm"></span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-space-xs">
+<span class="font-headline-sm text-headline-sm text-on-surface text-[15px] truncate">م. ريان القحطاني</span>
+<span class="px-1.5 py-0.5 rounded bg-primary-fixed text-on-primary-fixed-variant font-label-sm text-label-sm font-semibold">أنت</span>
+</div>
+<span class="font-code-sm text-code-sm text-on-surface-variant truncate">rayan@tadafuq.io</span>
+</div>
+</div>
+<div class="col-span-12 sm:col-span-6 lg:col-span-3 flex items-center gap-space-xs">
+<div class="inline-flex items-center gap-1.5 px-space-sm py-1 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-label-sm font-medium">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+<span>متصل الآن ويعمل على لوحة الكانبان</span>
+</div>
+</div>
+<div class="col-span-6 sm:col-span-3 lg:col-span-2">
+<div class="relative inline-block w-full max-w-[160px]">
+<select class="w-full bg-surface-container-high text-on-surface font-label-md text-label-md py-1.5 px-space-sm rounded-lg appearance-none cursor-pointer focus:outline-none">
+<option selected="">مالك مساحة العمل</option>
+<option>مدير مشروع</option>
+<option>عضو مساهم</option>
+<option>مشاهد فقط</option>
+</select>
+<span class="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-[16px] text-on-surface-variant pointer-events-none">expand_more</span>
+</div>
+</div>
+<div class="col-span-6 sm:col-span-3 lg:col-span-2 flex flex-col gap-0.5">
+<span class="font-body-sm text-body-sm text-primary font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">tab</span>
+            تطوير تدفق V2.0
+          </span>
+<span class="font-label-sm text-label-sm text-on-surface-variant font-code-sm">نشط في هذه اللحظة</span>
+</div>
+<div class="col-span-12 sm:col-span-12 lg:col-span-1 flex items-center justify-end lg:justify-center gap-space-xs">
+<button class="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" title="إرسال تنبيه" type="button">
+<span class="material-symbols-outlined text-[18px]">notifications_active</span>
+</button>
+<button class="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" title="خيارات إضافية" type="button">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Member Row 2: In Meeting -->
+<div class="grid grid-cols-12 px-space-lg py-space-md hover:bg-surface-container-low/60 transition-colors items-center gap-y-space-sm bg-surface-container-lowest">
+<div class="col-span-12 lg:col-span-4 flex items-center gap-space-md">
+<input class="w-4 h-4 rounded text-primary focus:ring-0 cursor-pointer" type="checkbox"/>
+<div class="relative">
+<img class="w-10 h-10 rounded-full object-cover" data-alt="Empowered Arab female product designer in a sleek modern office in Riyadh looking thoughtfully at the screen with subtle purple lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBcvtq4mJfp0LW3rU1_yuhGty0FYBGtLFOxqAIYhVb7JyPPdixZStABpYC62_0Xupm-uOnAAtbO__r6RhsE0krle4Jv3ZklvXnjEj4lGhLypBBmGgSWQ6BwL-QeF2J0e20GR8RoEgfTUvndWZhRZmov3RjdQLAvQwZe5hzslPBHqPpJYra1iBJ5kJmB_iEWKbN9LOI_PYdBmDtx_Qmyc5EuwBRDujQY4kRN7VocOCKoETMQkiWSqaDo"/>
+<span class="absolute bottom-0 left-0 w-3 h-3 rounded-full bg-primary shadow-sm"></span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-space-xs">
+<span class="font-headline-sm text-headline-sm text-on-surface text-[15px] truncate">سارة الشمري</span>
+<span class="px-1.5 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-label-sm">UI/UX Lead</span>
+</div>
+<span class="font-code-sm text-code-sm text-on-surface-variant truncate">sara.alshammari@tadafuq.io</span>
+</div>
+</div>
+<div class="col-span-12 sm:col-span-6 lg:col-span-3 flex items-center gap-space-xs">
+<div class="inline-flex items-center gap-1.5 px-space-sm py-1 rounded-full bg-primary-fixed text-on-primary-fixed-variant font-label-sm text-label-sm font-medium">
+<span class="w-2 h-2 rounded-full bg-primary animate-ping"></span>
+<span>في اجتماع فيديو مع فريق التصميم</span>
+</div>
+</div>
+<div class="col-span-6 sm:col-span-3 lg:col-span-2">
+<div class="relative inline-block w-full max-w-[160px]">
+<select class="w-full bg-surface-container-high text-on-surface font-label-md text-label-md py-1.5 px-space-sm rounded-lg appearance-none cursor-pointer focus:outline-none">
+<option>مالك مساحة العمل</option>
+<option selected="">مدير مشروع</option>
+<option>عضو مساهم</option>
+<option>مشاهد فقط</option>
+</select>
+<span class="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-[16px] text-on-surface-variant pointer-events-none">expand_more</span>
+</div>
+</div>
+<div class="col-span-6 sm:col-span-3 lg:col-span-2 flex flex-col gap-0.5">
+<span class="font-body-sm text-body-sm text-tertiary font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">brush</span>
+            منظومة التصميم العربي
+          </span>
+<span class="font-label-sm text-label-sm text-on-surface-variant font-code-sm">منذ 3 دقائق</span>
+</div>
+<div class="col-span-12 sm:col-span-12 lg:col-span-1 flex items-center justify-end lg:justify-center gap-space-xs">
+<button class="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" title="إرسال تنبيه" type="button">
+<span class="material-symbols-outlined text-[18px]">notifications_active</span>
+</button>
+<button class="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" title="خيارات إضافية" type="button">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Member Row 3: Active Collaborator with Live Cursor Badge -->
+<div class="grid grid-cols-12 px-space-lg py-space-md hover:bg-surface-container-low/60 transition-colors items-center gap-y-space-sm bg-surface-container-lowest">
+<div class="col-span-12 lg:col-span-4 flex items-center gap-space-md">
+<input class="w-4 h-4 rounded text-primary focus:ring-0 cursor-pointer" type="checkbox"/>
+<div class="relative">
+<div class="w-10 h-10 rounded-full bg-tertiary text-on-tertiary font-headline-sm text-headline-sm flex items-center justify-center shadow-sm">
+              ع
+            </div>
+<span class="absolute bottom-0 left-0 w-3 h-3 rounded-full bg-secondary shadow-sm"></span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-space-xs">
+<span class="font-headline-sm text-headline-sm text-on-surface text-[15px] truncate">عبدالعزيز المنصور</span>
+<span class="px-1.5 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-label-sm">DevOps Engineer</span>
+</div>
+<span class="font-code-sm text-code-sm text-on-surface-variant truncate">a.mansour@tadafuq.io</span>
+</div>
+</div>
+<div class="col-span-12 sm:col-span-6 lg:col-span-3 flex items-center gap-space-xs">
+<div class="inline-flex items-center gap-1.5 px-space-sm py-1 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-label-sm font-medium">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span>مشغول (يحرر الكود مباشرة)</span>
+</div>
+</div>
+<div class="col-span-6 sm:col-span-3 lg:col-span-2">
+<div class="relative inline-block w-full max-w-[160px]">
+<select class="w-full bg-surface-container-high text-on-surface font-label-md text-label-md py-1.5 px-space-sm rounded-lg appearance-none cursor-pointer focus:outline-none">
+<option>مالك مساحة العمل</option>
+<option>مدير مشروع</option>
+<option selected="">عضو مساهم</option>
+<option>مشاهد فقط</option>
+</select>
+<span class="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-[16px] text-on-surface-variant pointer-events-none">expand_more</span>
+</div>
+</div>
+<div class="col-span-6 sm:col-span-3 lg:col-span-2 flex flex-col gap-0.5">
+<span class="font-body-sm text-body-sm text-secondary font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">deployed_code</span>
+            بنية الخوادم السحابية
+          </span>
+<span class="font-label-sm text-label-sm text-on-surface-variant font-code-sm">منذ 8 دقائق</span>
+</div>
+<div class="col-span-12 sm:col-span-12 lg:col-span-1 flex items-center justify-end lg:justify-center gap-space-xs">
+<button class="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" title="إرسال تنبيه" type="button">
+<span class="material-symbols-outlined text-[18px]">notifications_active</span>
+</button>
+<button class="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" title="خيارات إضافية" type="button">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Member Row 4: Offline Collaborator -->
+<div class="grid grid-cols-12 px-space-lg py-space-md hover:bg-surface-container-low/60 transition-colors items-center gap-y-space-sm bg-surface-container-lowest opacity-80">
+<div class="col-span-12 lg:col-span-4 flex items-center gap-space-md">
+<input class="w-4 h-4 rounded text-primary focus:ring-0 cursor-pointer" type="checkbox"/>
+<div class="relative">
+<img class="w-10 h-10 rounded-full object-cover grayscale" data-alt="Portrait of a young male software developer in smart casual clothes standing in front of high tech office background with warm lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDYOJkxgoqvQh_EGm4vimXol9VEEJIpOPIkyM8qCCW1ZRvEb0gRwXi1yhzztjf38AY0OhfyD4blGgjiuSrFrdR_7UocBMjTuHOi1osJ95buk_S4yos8JXaGCY5NdISvnq8YshbA64yijU2BjjwTob_MjDVhGFJrY4xNc9KKo95JctzdvYxFLzI7Ix05peUong7UPM81pAu1VZz4Eg3iDSFeJsBh5awJ9dw9a8-1-vzK-E0xtb8Jv4ek"/>
+<span class="absolute bottom-0 left-0 w-3 h-3 rounded-full bg-outline shadow-sm"></span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-space-xs">
+<span class="font-headline-sm text-headline-sm text-on-surface text-[15px] truncate">فيصل الحربي</span>
+<span class="px-1.5 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-label-sm">QA Engineer</span>
+</div>
+<span class="font-code-sm text-code-sm text-on-surface-variant truncate">faisal.h@tadafuq.io</span>
+</div>
+</div>
+<div class="col-span-12 sm:col-span-6 lg:col-span-3 flex items-center gap-space-xs">
+<div class="inline-flex items-center gap-1.5 px-space-sm py-1 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm font-medium">
+<span class="w-2 h-2 rounded-full bg-outline"></span>
+<span>غير متصل (خارج الدوام)</span>
+</div>
+</div>
+<div class="col-span-6 sm:col-span-3 lg:col-span-2">
+<div class="relative inline-block w-full max-w-[160px]">
+<select class="w-full bg-surface-container-high text-on-surface font-label-md text-label-md py-1.5 px-space-sm rounded-lg appearance-none cursor-pointer focus:outline-none">
+<option>مالك مساحة العمل</option>
+<option>مدير مشروع</option>
+<option selected="">عضو مساهم</option>
+<option>مشاهد فقط</option>
+</select>
+<span class="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-[16px] text-on-surface-variant pointer-events-none">expand_more</span>
+</div>
+</div>
+<div class="col-span-6 sm:col-span-3 lg:col-span-2 flex flex-col gap-0.5">
+<span class="font-body-sm text-body-sm text-on-surface-variant font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">bug_report</span>
+            اختبارات الأمان السيبراني
+          </span>
+<span class="font-label-sm text-label-sm text-on-surface-variant font-code-sm">منذ 3 ساعات</span>
+</div>
+<div class="col-span-12 sm:col-span-12 lg:col-span-1 flex items-center justify-end lg:justify-center gap-space-xs">
+<button class="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" title="إرسال تنبيه" type="button">
+<span class="material-symbols-outlined text-[18px]">notifications_active</span>
+</button>
+<button class="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" title="خيارات إضافية" type="button">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Real-Time Synchronization & Collaborative Presence Settings (Bottom Section) -->
+<div class="p-space-xl rounded-2xl bg-surface-container-lowest shadow-sm flex flex-col gap-space-lg">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-md">
+<div class="w-12 h-12 rounded-2xl bg-primary-container text-on-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-[28px]">sync_saved_locally</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface">إعدادات المزامنة الفورية وبروتوكولات التواجد</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">تحكّم بدقة تحديث شاشات الفرق متعددة المواقع الجغرافية ومؤشرات الفأرة الحية</p>
+</div>
+</div>
+<div class="flex items-center gap-space-sm bg-secondary-container text-on-secondary-container px-space-md py-2 rounded-xl font-label-md text-label-md font-semibold self-start md:self-auto shadow-sm">
+<span class="relative flex h-2.5 w-2.5">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-secondary"></span>
+</span>
+<span>حالة الاتصال: WebSocket متصل ومؤمن 🟢</span>
+</div>
+</div>
+<!-- Settings Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-space-lg pt-space-xs">
+<!-- Live Cursors Switch -->
+<div class="p-space-md rounded-xl bg-surface-container-low flex flex-col justify-between gap-space-md">
+<div class="flex items-start justify-between">
+<div class="flex flex-col gap-1">
+<span class="font-headline-sm text-headline-sm text-on-surface text-[15px]">مؤشرات مؤشر الفأرة الحي (Live Cursors)</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant">إظهار حركة مؤشرات أعضاء الفريق وأسمائهم في اللوحات فورياً بتدرجات ألوانهم الخاصة.</p>
+</div>
+</div>
+<div class="flex items-center justify-between pt-space-xs">
+<span class="font-label-sm text-label-sm text-secondary font-semibold">مفعّل للجميع</span>
+<!-- Custom Toggle -->
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] rtl:after:right-auto rtl:after:left-[2px] after:bg-surface-container-lowest after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+<!-- Real-Time Comments Notifications -->
+<div class="p-space-md rounded-xl bg-surface-container-low flex flex-col justify-between gap-space-md">
+<div class="flex items-start justify-between">
+<div class="flex flex-col gap-1">
+<span class="font-headline-sm text-headline-sm text-on-surface text-[15px]">إشعارات التعليقات والتنبيهات المباشرة</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant">إطلاق فقاعات تفاعلية صوتية وبصرية عند قيام زميل بذكر اسمك (@) داخل بطاقة مهمة.</p>
+</div>
+</div>
+<div class="flex items-center justify-between pt-space-xs">
+<span class="font-label-sm text-label-sm text-secondary font-semibold">تنبيهات صوتية فورية</span>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] rtl:after:right-auto rtl:after:left-[2px] after:bg-surface-container-lowest after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+<!-- Latency & Refresh Frequency Slider -->
+<div class="p-space-md rounded-xl bg-surface-container-low flex flex-col justify-between gap-space-md">
+<div class="flex items-start justify-between">
+<div class="flex flex-col gap-1">
+<span class="font-headline-sm text-headline-sm text-on-surface text-[15px]">زمن التحديث التلقائي وخفض الاستهلاك</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant">معدل نقل الحزم (Packets) بين الخادم والواجهة المحلية للمحافظة على البطارية واستقرار الشبكة.</p>
+</div>
+</div>
+<div class="flex flex-col gap-1.5 pt-space-xs">
+<div class="flex items-center justify-between font-code-sm text-code-sm">
+<span class="text-on-surface-variant">التردد المطلوب:</span>
+<span class="text-primary font-bold">120ms (فائق السرعة)</span>
+</div>
+<div class="w-full bg-surface-container-high h-2 rounded-full overflow-hidden">
+<div class="bg-primary h-full rounded-full w-[85%]"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Quick Save & Security Audit Notice -->
+<div class="flex flex-col sm:flex-row items-center justify-between pt-space-sm gap-space-md">
+<div class="flex items-center gap-space-xs text-on-surface-variant font-label-md text-label-md">
+<span class="material-symbols-outlined text-[18px] text-secondary">verified_user</span>
+<span>كافة الصلاحيات والتغييرات موثقة في سجل التدقيق السحابي (SOC-2 Type II Certified)</span>
+</div>
+<div class="flex items-center gap-space-xs">
+<button class="px-space-lg py-2 rounded-xl bg-surface-container-low text-on-surface hover:bg-surface-container-high transition-colors font-body-sm text-body-sm" type="button">
+            إلغاء التغييرات
+          </button>
+<button class="px-space-xl py-2 rounded-xl bg-primary text-on-primary hover:bg-primary-container transition-colors font-body-sm text-body-sm font-semibold shadow-sm" type="button">
+            حفظ إعدادات المزامنة
+          </button>
+</div>
+</div>
+</div>
+</div>
+</div></main></div></body></html>

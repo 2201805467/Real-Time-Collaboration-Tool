@@ -55,8 +55,13 @@ export function verifyToken(token) {
 
   const [encodedPayload, signature] = token.split('.');
   const expectedSignature = sign(encodedPayload);
+  const signatureBuffer = Buffer.from(signature);
+  const expectedSignatureBuffer = Buffer.from(expectedSignature);
 
-  if (signature !== expectedSignature) {
+  if (
+    signatureBuffer.length !== expectedSignatureBuffer.length ||
+    !timingSafeEqual(signatureBuffer, expectedSignatureBuffer)
+  ) {
     return null;
   }
 

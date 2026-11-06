@@ -4,7 +4,7 @@ import { createServer } from 'http';
 import { randomUUID } from 'crypto';
 import { Server } from 'socket.io';
 import { db, getDatabaseSummary } from './db.js';
-import { createToken, getPublicUser, hashPassword, requireAuth, verifyPassword } from './auth.js';
+import { createToken, getPublicUser, hashPassword, requireAuth, verifyPassword, verifyToken } from './auth.js';
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -20,6 +20,26 @@ const boardPresence = new Map();
 
 app.use(cors());
 app.use(express.json());
+
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  const payload = verifyToken(token);
+
+  if (!payload) {
+    return next(new Error('Unauthorized'));
+  }
+
+  const user = db
+    .prepare('SELECT id, name, email FROM users WHERE id = ?')
+    .get(payload.sub);
+
+  if (!user) {
+    return next(new Error('Unauthorized'));
+  }
+
+  socket.data.user = user;
+  return next();
+});
 
 function getPresenceList(boardId) {
   return Array.from(boardPresence.get(boardId)?.values() || []);
@@ -52,6 +72,96 @@ function removeSocketFromPresence(socket) {
   });
 
   socket.data.joinedBoards = new Set();
+}
+
+function revokeBoardAccess(boardId, userId) {
+  const roomName = `board:${boardId}`;
+  const users = boardPresence.get(boardId);
+
+  io.sockets.sockets.forEach((socket) => {
+    if (socket.data.user?.id !== userId || !socket.data.joinedBoards?.has(boardId)) {
+      return;
+    }
+
+    socket.emit('board:access-revoked', { boardId });
+    socket.leave(roomName);
+    socket.data.joinedBoards.delete(boardId);
+    users?.delete(socket.id);
+  });
+
+  if (users?.size === 0) {
+    boardPresence.delete(boardId);
+  }
+
+  emitPresence(boardId);
+}
+
+function parseJsonList(value) {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeTags(value) {
+  const tags = Array.isArray(value)
+    ? value
+    : String(value || '')
+      .split(',')
+      .map((tag) => tag.trim());
+
+  return Array.from(new Set(tags.filter(Boolean))).slice(0, 8);
+}
+
+function normalizeChecklist(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const allowedStatuses = new Set(['todo', 'in_progress', 'done']);
+
+  return value
+    .map((item) => {
+      const requestedStatus = String(item.status || '').trim();
+      const status = allowedStatuses.has(requestedStatus)
+        ? requestedStatus
+        : item.done
+          ? 'done'
+          : 'todo';
+
+      return {
+        id: item.id || randomUUID(),
+        text: String(item.text || '').trim(),
+        assigneeId: String(item.assigneeId || '').trim(),
+        status
+      };
+    })
+    .filter((item) => item.text)
+    .slice(0, 20);
+}
+
+function serializeCard(card) {
+  if (!card) {
+    return card;
+  }
+
+  const checklist = parseJsonList(card.checklist);
+  const completedChecklistItems = checklist.filter((item) => item.status === 'done' || item.done).length;
+
+  return {
+    ...card,
+    priority: card.priority || 'normal',
+    tags: parseJsonList(card.tags),
+    checklist: normalizeChecklist(checklist),
+    completedChecklistItems,
+    checklistTotal: checklist.length
+  };
 }
 
 app.get('/api/health', (req, res) => {
@@ -88,7 +198,11 @@ app.post('/api/auth/register', (req, res) => {
     db.prepare('INSERT INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)')
       .run(user.id, user.name, user.email, user.passwordHash);
   } catch (error) {
-    if (error.code === 'ERR_SQLITE_CONSTRAINT_UNIQUE') {
+    const isDuplicateEmail =
+      error.code === 'ERR_SQLITE_CONSTRAINT_UNIQUE' ||
+      (error.code === 'ERR_SQLITE_ERROR' && error.message?.includes('UNIQUE constraint failed: users.email'));
+
+    if (isDuplicateEmail) {
       return res.status(409).json({ message: 'Email is already registered' });
     }
 
@@ -127,7 +241,13 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
 function getBoardForUser(boardId, userId) {
   return db
     .prepare(`
-      SELECT boards.id, boards.title, boards.created_at AS createdAt, boards.updated_at AS updatedAt
+      SELECT
+        boards.id,
+        boards.owner_id AS ownerId,
+        boards.title,
+        board_members.role,
+        boards.created_at AS createdAt,
+        boards.updated_at AS updatedAt
       FROM boards
       INNER JOIN board_members ON board_members.board_id = boards.id
       WHERE boards.id = ?
@@ -136,8 +256,133 @@ function getBoardForUser(boardId, userId) {
     .get(boardId, userId);
 }
 
+function isOwner(board) {
+  return board?.role === 'owner';
+}
+
+function isBoardManager(board) {
+  return board?.role === 'manager';
+}
+
+function isCardManager(card, userId) {
+  return card?.assigneeId === userId;
+}
+
+function requireOwner(board, res) {
+  if (isOwner(board)) {
+    return true;
+  }
+
+  res.status(403).json({ message: 'Only the board owner can do this action' });
+  return false;
+}
+
+function logActivity(boardId, userId, action, entityType, entityId, metadata = {}) {
+  db.prepare(`
+    INSERT INTO activity_logs (id, board_id, user_id, action, entity_type, entity_id, metadata)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(randomUUID(), boardId, userId, action, entityType, entityId, JSON.stringify(metadata));
+}
+
+function isCompletionColumnTitle(title) {
+  const normalizedTitle = String(title || '').trim().toLowerCase();
+  return ['done', 'complete', 'completed', 'مكتملة', 'تم', 'منجزة'].some((word) => normalizedTitle.includes(word));
+}
+
+function getWorkspaceStats(userId) {
+  const boards = db
+    .prepare(`
+      SELECT boards.id, boards.title, board_members.role, boards.updated_at AS updatedAt
+      FROM boards
+      INNER JOIN board_members ON board_members.board_id = boards.id
+      WHERE board_members.user_id = ?
+    `)
+    .all(userId);
+
+  if (boards.length === 0) {
+    return {
+      boards: { total: 0, owned: 0, shared: 0 },
+      cards: { total: 0, completed: 0, completedThisWeek: 0 },
+      checklist: { total: 0, completed: 0 },
+      velocity: 0,
+      storage: { usedPercent: 0, usedLabel: '0 GB', limitLabel: '20 GB' }
+    };
+  }
+
+  const boardIds = new Set(boards.map((board) => board.id));
+  const cards = db
+    .prepare(`
+      SELECT cards.id, cards.checklist, cards.updated_at AS updatedAt, board_columns.title AS columnTitle
+      FROM cards
+      INNER JOIN board_columns ON board_columns.id = cards.column_id
+      INNER JOIN board_members ON board_members.board_id = board_columns.board_id
+      WHERE board_members.user_id = ?
+        AND cards.deleted_at IS NULL
+    `)
+    .all(userId);
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const completedCards = cards.filter((card) => isCompletionColumnTitle(card.columnTitle));
+  const completedThisWeek = completedCards.filter((card) => new Date(card.updatedAt).getTime() >= weekAgo).length;
+  const checklist = cards.flatMap((card) => parseJsonList(card.checklist));
+  const completedChecklist = checklist.filter((item) => item.status === 'done' || item.done).length;
+  const completionUnits = cards.length + checklist.length;
+  const completedUnits = completedCards.length + completedChecklist;
+
+  return {
+    boards: {
+      total: boards.length,
+      owned: boards.filter((board) => board.role === 'owner').length,
+      shared: boards.filter((board) => board.role !== 'owner').length
+    },
+    cards: {
+      total: cards.length,
+      completed: completedCards.length,
+      completedThisWeek
+    },
+    checklist: {
+      total: checklist.length,
+      completed: completedChecklist
+    },
+    velocity: completionUnits ? Math.round((completedUnits / completionUnits) * 1000) / 10 : 0,
+    storage: {
+      usedPercent: Math.min(78, Math.max(0, Math.round((cards.length + boardIds.size) * 3))),
+      usedLabel: `${Math.min(15.6, Math.round((cards.length + boardIds.size) * 0.18 * 10) / 10)} GB`,
+      limitLabel: '20 GB'
+    }
+  };
+}
+
+function canUpdateOwnSubtaskStatuses(previousChecklist, nextChecklist, userId) {
+  if (previousChecklist.length !== nextChecklist.length) {
+    return false;
+  }
+
+  const previousItems = new Map(previousChecklist.map((item) => [item.id, item]));
+
+  return nextChecklist.every((nextItem) => {
+    const previousItem = previousItems.get(nextItem.id);
+
+    if (!previousItem) {
+      return false;
+    }
+
+    const sameText = previousItem.text === nextItem.text;
+    const sameAssignee = (previousItem.assigneeId || '') === (nextItem.assigneeId || '');
+
+    if (!sameText || !sameAssignee) {
+      return false;
+    }
+
+    if (previousItem.status === nextItem.status) {
+      return true;
+    }
+
+    return nextItem.assigneeId === userId;
+  });
+}
+
 function getCardForBoard(cardId, boardId) {
-  return db
+  const card = db
     .prepare(`
       SELECT
         cards.id,
@@ -145,18 +390,48 @@ function getCardForBoard(cardId, boardId) {
         cards.title,
         cards.description,
         cards.assignee_id AS assigneeId,
+        assignee.name AS assigneeName,
         cards.due_date AS dueDate,
+        cards.priority,
+        cards.tags,
+        cards.checklist,
         cards.position,
         cards.version,
         cards.created_at AS createdAt,
         cards.updated_at AS updatedAt
       FROM cards
       INNER JOIN board_columns ON board_columns.id = cards.column_id
+      LEFT JOIN users AS assignee ON assignee.id = cards.assignee_id
       WHERE cards.id = ?
         AND board_columns.board_id = ?
         AND cards.deleted_at IS NULL
     `)
     .get(cardId, boardId);
+
+  return serializeCard(card);
+}
+
+function getBoardMembers(boardId) {
+  return db
+    .prepare(`
+      SELECT
+        users.id,
+        users.name,
+        users.email,
+        board_members.role,
+        board_members.joined_at AS joinedAt
+      FROM board_members
+      INNER JOIN users ON users.id = board_members.user_id
+      WHERE board_members.board_id = ?
+      ORDER BY
+        CASE board_members.role
+          WHEN 'owner' THEN 0
+          WHEN 'manager' THEN 1
+          ELSE 2
+        END,
+        users.name ASC
+    `)
+    .all(boardId);
 }
 
 function getCommentsForCard(cardId) {
@@ -181,7 +456,12 @@ function getCommentsForCard(cardId) {
 app.get('/api/boards', requireAuth, (req, res) => {
   const boards = db
     .prepare(`
-      SELECT boards.id, boards.title, boards.created_at AS createdAt, boards.updated_at AS updatedAt
+      SELECT
+        boards.id,
+        boards.title,
+        board_members.role,
+        boards.created_at AS createdAt,
+        boards.updated_at AS updatedAt
       FROM boards
       INNER JOIN board_members ON board_members.board_id = boards.id
       WHERE board_members.user_id = ?
@@ -190,6 +470,64 @@ app.get('/api/boards', requireAuth, (req, res) => {
     .all(req.user.id);
 
   res.json({ boards });
+});
+
+app.get('/api/workspace/stats', requireAuth, (req, res) => {
+  res.json({ stats: getWorkspaceStats(req.user.id) });
+});
+
+app.get('/api/workspace/activity', requireAuth, (req, res) => {
+  const loggedActivity = db
+    .prepare(`
+      SELECT
+        activity_logs.id,
+        activity_logs.action,
+        activity_logs.entity_type AS entityType,
+        activity_logs.entity_id AS entityId,
+        activity_logs.metadata,
+        activity_logs.created_at AS createdAt,
+        boards.title AS boardTitle,
+        users.name AS actorName
+      FROM activity_logs
+      INNER JOIN board_members ON board_members.board_id = activity_logs.board_id
+      INNER JOIN boards ON boards.id = activity_logs.board_id
+      LEFT JOIN users ON users.id = activity_logs.user_id
+      WHERE board_members.user_id = ?
+      ORDER BY activity_logs.created_at DESC
+      LIMIT 12
+    `)
+    .all(req.user.id)
+    .map((item) => ({ ...item, metadata: JSON.parse(item.metadata || '{}') }));
+
+  if (loggedActivity.length > 0) {
+    return res.json({ activity: loggedActivity });
+  }
+
+  const fallbackActivity = db
+    .prepare(`
+      SELECT
+        comments.id,
+        'commented' AS action,
+        'comment' AS entityType,
+        comments.card_id AS entityId,
+        comments.created_at AS createdAt,
+        boards.title AS boardTitle,
+        users.name AS actorName,
+        cards.title AS cardTitle
+      FROM comments
+      INNER JOIN cards ON cards.id = comments.card_id
+      INNER JOIN board_columns ON board_columns.id = cards.column_id
+      INNER JOIN boards ON boards.id = board_columns.board_id
+      INNER JOIN board_members ON board_members.board_id = boards.id
+      INNER JOIN users ON users.id = comments.user_id
+      WHERE board_members.user_id = ?
+      ORDER BY comments.created_at DESC
+      LIMIT 12
+    `)
+    .all(req.user.id)
+    .map((item) => ({ ...item, metadata: { cardTitle: item.cardTitle } }));
+
+  res.json({ activity: fallbackActivity });
 });
 
 app.post('/api/boards', requireAuth, (req, res) => {
@@ -211,6 +549,7 @@ app.post('/api/boards', requireAuth, (req, res) => {
       .run(board.id, req.user.id, board.title);
     db.prepare('INSERT INTO board_members (board_id, user_id, role) VALUES (?, ?, ?)')
       .run(board.id, req.user.id, 'owner');
+    logActivity(board.id, req.user.id, 'created', 'board', board.id, { title: board.title });
 
     const insertColumn = db.prepare(
       'INSERT INTO board_columns (id, board_id, title, position) VALUES (?, ?, ?, ?)'
@@ -226,13 +565,7 @@ app.post('/api/boards', requireAuth, (req, res) => {
     throw error;
   }
 
-  const createdBoard = db
-    .prepare(`
-      SELECT id, title, created_at AS createdAt, updated_at AS updatedAt
-      FROM boards
-      WHERE id = ?
-    `)
-    .get(board.id);
+  const createdBoard = getBoardForUser(board.id, req.user.id);
 
   res.status(201).json({ board: createdBoard });
 });
@@ -244,6 +577,10 @@ app.patch('/api/boards/:boardId', requireAuth, (req, res) => {
     return res.status(404).json({ message: 'Board not found' });
   }
 
+  if (!requireOwner(board, res)) {
+    return;
+  }
+
   const title = String(req.body.title || '').trim();
 
   if (!title) {
@@ -252,6 +589,7 @@ app.patch('/api/boards/:boardId', requireAuth, (req, res) => {
 
   db.prepare('UPDATE boards SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
     .run(title, board.id);
+  logActivity(board.id, req.user.id, 'updated', 'board', board.id, { title });
 
   const updatedBoard = getBoardForUser(board.id, req.user.id);
 
@@ -269,13 +607,17 @@ app.delete('/api/boards/:boardId', requireAuth, (req, res) => {
     return res.status(404).json({ message: 'Board not found' });
   }
 
+  if (!requireOwner(board, res)) {
+    return;
+  }
+
   db.prepare('DELETE FROM boards WHERE id = ?').run(board.id);
 
   io.to(`board:${board.id}`).emit('board:deleted', {
     boardId: board.id
   });
 
-  res.status(204).end();
+  res.json({ boardId: board.id });
 });
 
 app.post('/api/boards/:boardId/invites', requireAuth, (req, res) => {
@@ -283,6 +625,10 @@ app.post('/api/boards/:boardId/invites', requireAuth, (req, res) => {
 
   if (!board) {
     return res.status(404).json({ message: 'Board not found' });
+  }
+
+  if (!requireOwner(board, res)) {
+    return;
   }
 
   const inviteId = randomUUID();
@@ -353,14 +699,9 @@ app.post('/api/invites/:token/accept', requireAuth, (req, res) => {
     INSERT OR IGNORE INTO board_members (board_id, user_id, role)
     VALUES (?, ?, ?)
   `).run(invite.boardId, req.user.id, 'member');
+  logActivity(invite.boardId, req.user.id, 'joined', 'board', invite.boardId);
 
-  const board = db
-    .prepare(`
-      SELECT id, title, created_at AS createdAt, updated_at AS updatedAt
-      FROM boards
-      WHERE id = ?
-    `)
-    .get(invite.boardId);
+  const board = getBoardForUser(invite.boardId, req.user.id);
 
   res.json({ board });
 });
@@ -389,12 +730,17 @@ app.get('/api/boards/:boardId', requireAuth, (req, res) => {
         cards.title,
         cards.description,
         cards.assignee_id AS assigneeId,
+        assignee.name AS assigneeName,
         cards.due_date AS dueDate,
+        cards.priority,
+        cards.tags,
+        cards.checklist,
         cards.position,
         cards.version,
         cards.created_at AS createdAt,
         cards.updated_at AS updatedAt
       FROM cards
+      LEFT JOIN users AS assignee ON assignee.id = cards.assignee_id
       WHERE cards.column_id IN (
         SELECT id FROM board_columns WHERE board_id = ?
       )
@@ -405,7 +751,7 @@ app.get('/api/boards/:boardId', requireAuth, (req, res) => {
 
   const columnsWithCards = columns.map((column) => ({
     ...column,
-    cards: cards.filter((card) => card.columnId === column.id)
+    cards: cards.filter((card) => card.columnId === column.id).map(serializeCard)
   }));
 
   res.json({
@@ -414,11 +760,141 @@ app.get('/api/boards/:boardId', requireAuth, (req, res) => {
   });
 });
 
+app.get('/api/boards/:boardId/members', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+
+  if (!board) {
+    return res.status(404).json({ message: 'Board not found' });
+  }
+
+  res.json({ members: getBoardMembers(board.id) });
+});
+
+app.patch('/api/boards/:boardId/members/:memberId', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+
+  if (!board) {
+    return res.status(404).json({ message: 'Board not found' });
+  }
+
+  if (!requireOwner(board, res)) {
+    return;
+  }
+
+  if (req.params.memberId === board.ownerId) {
+    return res.status(400).json({ message: 'The board owner role cannot be changed' });
+  }
+
+  const role = String(req.body.role || '').trim();
+  const allowedRoles = new Set(['manager', 'member']);
+
+  if (!allowedRoles.has(role)) {
+    return res.status(400).json({ message: 'Role must be manager or member' });
+  }
+
+  const member = db
+    .prepare('SELECT user_id AS userId FROM board_members WHERE board_id = ? AND user_id = ?')
+    .get(board.id, req.params.memberId);
+
+  if (!member) {
+    return res.status(404).json({ message: 'Member not found' });
+  }
+
+  db.prepare('UPDATE board_members SET role = ? WHERE board_id = ? AND user_id = ?')
+    .run(role, board.id, req.params.memberId);
+
+  if (role === 'member') {
+    db.prepare(`
+      UPDATE cards
+      SET assignee_id = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE assignee_id = ?
+        AND column_id IN (SELECT id FROM board_columns WHERE board_id = ?)
+    `).run(req.params.memberId, board.id);
+  }
+
+  db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+  logActivity(board.id, req.user.id, 'updated_role', 'member', req.params.memberId, { role });
+
+  const updatedMember = getBoardMembers(board.id).find((item) => item.id === req.params.memberId);
+
+  io.to(`board:${board.id}`).emit('board:member-updated', {
+    boardId: board.id,
+    member: updatedMember
+  });
+
+  res.json({ member: updatedMember });
+});
+
+app.delete('/api/boards/:boardId/members/:memberId', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+
+  if (!board) {
+    return res.status(404).json({ message: 'Board not found' });
+  }
+
+  if (!requireOwner(board, res)) {
+    return;
+  }
+
+  if (req.params.memberId === board.ownerId) {
+    return res.status(400).json({ message: 'The board owner cannot be removed' });
+  }
+
+  const member = db
+    .prepare('SELECT user_id AS userId FROM board_members WHERE board_id = ? AND user_id = ?')
+    .get(board.id, req.params.memberId);
+
+  if (!member) {
+    return res.status(404).json({ message: 'Member not found' });
+  }
+
+  db.prepare('DELETE FROM board_members WHERE board_id = ? AND user_id = ?')
+    .run(board.id, req.params.memberId);
+  db.prepare('UPDATE cards SET assignee_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE assignee_id = ? AND column_id IN (SELECT id FROM board_columns WHERE board_id = ?)')
+    .run(req.params.memberId, board.id);
+
+  const cardsWithSubtasks = db
+    .prepare(`
+      SELECT id, checklist
+      FROM cards
+      WHERE column_id IN (SELECT id FROM board_columns WHERE board_id = ?)
+        AND deleted_at IS NULL
+    `)
+    .all(board.id);
+  const updateChecklist = db.prepare('UPDATE cards SET checklist = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+
+  cardsWithSubtasks.forEach((card) => {
+    const checklist = normalizeChecklist(parseJsonList(card.checklist));
+    const nextChecklist = checklist.map((item) =>
+      item.assigneeId === req.params.memberId ? { ...item, assigneeId: '' } : item
+    );
+
+    if (JSON.stringify(checklist) !== JSON.stringify(nextChecklist)) {
+      updateChecklist.run(JSON.stringify(nextChecklist), card.id);
+    }
+  });
+
+  db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+
+  revokeBoardAccess(board.id, req.params.memberId);
+
+  io.to(`board:${board.id}`).emit('board:member-removed', {
+    boardId: board.id,
+    memberId: req.params.memberId
+  });
+
+  res.json({ memberId: req.params.memberId });
+});
+
 app.post('/api/boards/:boardId/columns', requireAuth, (req, res) => {
   const board = getBoardForUser(req.params.boardId, req.user.id);
 
   if (!board) {
     return res.status(404).json({ message: 'Board not found' });
+  }
+
+  if (!requireOwner(board, res)) {
+    return;
   }
 
   const title = String(req.body.title || '').trim();
@@ -459,6 +935,10 @@ app.patch('/api/boards/:boardId/columns/:columnId', requireAuth, (req, res) => {
 
   if (!board) {
     return res.status(404).json({ message: 'Board not found' });
+  }
+
+  if (!requireOwner(board, res)) {
+    return;
   }
 
   const column = db
@@ -502,6 +982,10 @@ app.delete('/api/boards/:boardId/columns/:columnId', requireAuth, (req, res) => 
     return res.status(404).json({ message: 'Board not found' });
   }
 
+  if (!requireOwner(board, res)) {
+    return;
+  }
+
   const column = db
     .prepare('SELECT id FROM board_columns WHERE id = ? AND board_id = ?')
     .get(req.params.columnId, board.id);
@@ -526,7 +1010,7 @@ app.delete('/api/boards/:boardId/columns/:columnId', requireAuth, (req, res) => 
     columnId: column.id
   });
 
-  res.status(204).end();
+  res.json({ columnId: column.id });
 });
 
 app.post('/api/boards/:boardId/columns/:columnId/cards', requireAuth, (req, res) => {
@@ -534,6 +1018,10 @@ app.post('/api/boards/:boardId/columns/:columnId/cards', requireAuth, (req, res)
 
   if (!board) {
     return res.status(404).json({ message: 'Board not found' });
+  }
+
+  if (!requireOwner(board, res)) {
+    return;
   }
 
   const column = db
@@ -559,32 +1047,39 @@ app.post('/api/boards/:boardId/columns/:columnId/cards', requireAuth, (req, res)
   db.prepare('INSERT INTO cards (id, column_id, title, position) VALUES (?, ?, ?, ?)')
     .run(cardId, column.id, title, nextPosition);
   db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+  logActivity(board.id, req.user.id, 'created', 'card', cardId, { title });
 
   const card = db
     .prepare(`
       SELECT
-        id,
-        column_id AS columnId,
-        title,
-        description,
-        assignee_id AS assigneeId,
-        due_date AS dueDate,
-        position,
-        version,
-        created_at AS createdAt,
-        updated_at AS updatedAt
+        cards.id,
+        cards.column_id AS columnId,
+        cards.title,
+        cards.description,
+        cards.assignee_id AS assigneeId,
+        assignee.name AS assigneeName,
+        cards.due_date AS dueDate,
+        cards.priority,
+        cards.tags,
+        cards.checklist,
+        cards.position,
+        cards.version,
+        cards.created_at AS createdAt,
+        cards.updated_at AS updatedAt
       FROM cards
-      WHERE id = ?
+      LEFT JOIN users AS assignee ON assignee.id = cards.assignee_id
+      WHERE cards.id = ?
     `)
     .get(cardId);
+  const serializedCard = serializeCard(card);
 
   io.to(`board:${board.id}`).emit('board:card-created', {
     boardId: board.id,
     columnId: column.id,
-    card
+    card: serializedCard
   });
 
-  res.status(201).json({ card });
+  res.status(201).json({ card: serializedCard });
 });
 
 app.patch('/api/boards/:boardId/cards/:cardId/move', requireAuth, (req, res) => {
@@ -606,7 +1101,7 @@ app.patch('/api/boards/:boardId/cards/:cardId/move', requireAuth, (req, res) => 
 
   const card = db
     .prepare(`
-      SELECT cards.id, cards.column_id AS columnId
+      SELECT cards.id, cards.column_id AS columnId, cards.assignee_id AS assigneeId
       FROM cards
       INNER JOIN board_columns ON board_columns.id = cards.column_id
       WHERE cards.id = ?
@@ -617,6 +1112,10 @@ app.patch('/api/boards/:boardId/cards/:cardId/move', requireAuth, (req, res) => 
 
   if (!card) {
     return res.status(404).json({ message: 'Card not found' });
+  }
+
+  if (!isOwner(board) && !isCardManager(card, req.user.id)) {
+    return res.status(403).json({ message: 'Only the owner or card manager can move this card' });
   }
 
   const siblingCards = db
@@ -663,6 +1162,7 @@ app.patch('/api/boards/:boardId/cards/:cardId/move', requireAuth, (req, res) => 
     }
 
     db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+    logActivity(board.id, req.user.id, 'moved', 'card', card.id, { columnId: targetColumn.id });
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');
@@ -672,30 +1172,36 @@ app.patch('/api/boards/:boardId/cards/:cardId/move', requireAuth, (req, res) => 
   const movedCard = db
     .prepare(`
       SELECT
-        id,
-        column_id AS columnId,
-        title,
-        description,
-        assignee_id AS assigneeId,
-        due_date AS dueDate,
-        position,
-        version,
-        created_at AS createdAt,
-        updated_at AS updatedAt
+        cards.id,
+        cards.column_id AS columnId,
+        cards.title,
+        cards.description,
+        cards.assignee_id AS assigneeId,
+        assignee.name AS assigneeName,
+        cards.due_date AS dueDate,
+        cards.priority,
+        cards.tags,
+        cards.checklist,
+        cards.position,
+        cards.version,
+        cards.created_at AS createdAt,
+        cards.updated_at AS updatedAt
       FROM cards
-      WHERE id = ?
+      LEFT JOIN users AS assignee ON assignee.id = cards.assignee_id
+      WHERE cards.id = ?
     `)
     .get(card.id);
+  const serializedMovedCard = serializeCard(movedCard);
 
   io.to(`board:${board.id}`).emit('board:card-moved', {
     boardId: board.id,
-    card: movedCard,
+    card: serializedMovedCard,
     sourceColumnId: card.columnId,
     targetColumnId: targetColumn.id,
     position: insertAt
   });
 
-  res.json({ card: movedCard });
+  res.json({ card: serializedMovedCard });
 });
 
 app.get('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
@@ -732,19 +1238,75 @@ app.patch('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
 
   const title = String(req.body.title ?? existingCard.title).trim();
   const description = String(req.body.description ?? existingCard.description ?? '').trim();
-  const dueDateInput = String(req.body.dueDate ?? '').trim();
+  const dueDateInput = String(req.body.dueDate ?? existingCard.dueDate ?? '').trim();
   const dueDate = dueDateInput || null;
+  const allowedPriorities = new Set(['urgent', 'medium', 'normal']);
+  const requestedPriority = String(req.body.priority ?? existingCard.priority ?? 'normal');
+  const priority = allowedPriorities.has(requestedPriority) ? requestedPriority : 'normal';
+  const tags = normalizeTags(req.body.tags ?? existingCard.tags);
+  const checklist = normalizeChecklist(req.body.checklist ?? existingCard.checklist);
+  const requestedAssigneeId = String(req.body.assigneeId ?? existingCard.assigneeId ?? '').trim();
+  const assigneeId = requestedAssigneeId || null;
+  const userIsOwner = isOwner(board);
+  const userIsManager = isCardManager(existingCard, req.user.id);
 
   if (!title) {
     return res.status(400).json({ message: 'Card title is required' });
   }
 
+  if (assigneeId) {
+    const assignee = db
+      .prepare('SELECT user_id AS userId, role FROM board_members WHERE board_id = ? AND user_id = ?')
+      .get(board.id, assigneeId);
+
+    if (!assignee) {
+      return res.status(400).json({ message: 'Assignee must be a board member' });
+    }
+
+    if (!['owner', 'manager'].includes(assignee.role)) {
+      return res.status(400).json({ message: 'Card manager must be an owner or manager' });
+    }
+  }
+
+  const memberIds = new Set(getBoardMembers(board.id).map((member) => member.id));
+  const hasInvalidSubtaskAssignee = checklist.some((item) => item.assigneeId && !memberIds.has(item.assigneeId));
+
+  if (hasInvalidSubtaskAssignee) {
+    return res.status(400).json({ message: 'Subtask assignees must be board members' });
+  }
+
+  const ownerControlledFieldsChanged =
+    title !== existingCard.title ||
+    description !== (existingCard.description || '') ||
+    dueDate !== (existingCard.dueDate || null) ||
+    assigneeId !== (existingCard.assigneeId || null) ||
+    priority !== (existingCard.priority || 'normal') ||
+    JSON.stringify(tags) !== JSON.stringify(existingCard.tags || []);
+
+  if (!userIsOwner && ownerControlledFieldsChanged) {
+    return res.status(403).json({ message: 'Only the board owner can edit card details or assign the card manager' });
+  }
+
+  if (!userIsOwner && !userIsManager && !canUpdateOwnSubtaskStatuses(existingCard.checklist || [], checklist, req.user.id)) {
+    return res.status(403).json({ message: 'Members can only update the status of subtasks assigned to them' });
+  }
+
   db.prepare(`
     UPDATE cards
-    SET title = ?, description = ?, due_date = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP
+    SET
+      title = ?,
+      description = ?,
+      due_date = ?,
+      assignee_id = ?,
+      priority = ?,
+      tags = ?,
+      checklist = ?,
+      version = version + 1,
+      updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
-  `).run(title, description, dueDate, existingCard.id);
+  `).run(title, description, dueDate, assigneeId, priority, JSON.stringify(tags), JSON.stringify(checklist), existingCard.id);
   db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+  logActivity(board.id, req.user.id, 'updated', 'card', existingCard.id, { title, priority });
 
   const card = getCardForBoard(existingCard.id, board.id);
 
@@ -780,6 +1342,7 @@ app.post('/api/boards/:boardId/cards/:cardId/comments', requireAuth, (req, res) 
   db.prepare('INSERT INTO comments (id, card_id, user_id, body) VALUES (?, ?, ?, ?)')
     .run(commentId, card.id, req.user.id, body);
   db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+  logActivity(board.id, req.user.id, 'commented', 'card', card.id, { title: card.title });
 
   const comment = getCommentsForCard(card.id).find((item) => item.id === commentId);
 
@@ -805,12 +1368,17 @@ app.delete('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
     return res.status(404).json({ message: 'Card not found' });
   }
 
+  if (!requireOwner(board, res)) {
+    return;
+  }
+
   db.prepare(`
     UPDATE cards
     SET deleted_at = CURRENT_TIMESTAMP, version = version + 1, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(card.id);
   db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+  logActivity(board.id, req.user.id, 'deleted', 'card', card.id, { title: card.title });
 
   const sourceCards = db
     .prepare(`
@@ -832,7 +1400,7 @@ app.delete('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
     columnId: card.columnId
   });
 
-  res.status(204).end();
+  res.json({ cardId: card.id });
 });
 
 io.on('connection', (socket) => {
@@ -844,11 +1412,19 @@ io.on('connection', (socket) => {
 
   socket.data.joinedBoards = new Set();
 
-  socket.on('board:join', (payload) => {
+  socket.on('board:join', (payload, acknowledge) => {
     const boardId = typeof payload === 'string' ? payload : payload?.boardId;
-    const user = typeof payload === 'object' ? payload.user : null;
+    const user = socket.data.user;
 
-    if (!boardId || !user?.id) {
+    if (!boardId) {
+      acknowledge?.({ ok: false, message: 'Board ID is required' });
+      return;
+    }
+
+    const board = getBoardForUser(boardId, user.id);
+
+    if (!board) {
+      acknowledge?.({ ok: false, message: 'You are not a member of this board' });
       return;
     }
 
@@ -861,12 +1437,13 @@ io.on('connection', (socket) => {
 
     boardPresence.get(boardId).set(socket.id, {
       id: user.id,
-      name: user.name || 'Anonymous',
-      email: user.email || '',
+      name: user.name,
+      email: user.email,
       socketId: socket.id
     });
 
     emitPresence(boardId);
+    acknowledge?.({ ok: true });
   });
 
   socket.on('board:leave', (boardId) => {
@@ -901,6 +1478,16 @@ io.on('connection', (socket) => {
     removeSocketFromPresence(socket);
     console.log(`Socket disconnected: ${socket.id}`);
   });
+});
+
+app.use((error, req, res, next) => {
+  console.error(error);
+
+  if (res.headersSent) {
+    return next(error);
+  }
+
+  return res.status(500).json({ message: 'Internal server error' });
 });
 
 httpServer.listen(port, () => {
