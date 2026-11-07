@@ -1956,6 +1956,105 @@ button:disabled {
   background: var(--surface-container-low);
 }
 
+.task-timeline,
+.task-activity-pane .comments-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--outline-variant);
+  border-radius: 12px;
+  background: var(--surface-lowest);
+  box-shadow: var(--shadow-soft);
+}
+
+.task-timeline-heading,
+.task-timeline-heading > div {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.task-timeline-heading > div {
+  justify-content: flex-start;
+}
+
+.task-timeline-heading h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.task-timeline-heading > span {
+  min-width: 26px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  text-align: center;
+  color: var(--on-primary-fixed-variant);
+  background: var(--primary-fixed);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.task-timeline-list {
+  display: grid;
+}
+
+.task-timeline-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 10px;
+  padding: 9px 0;
+}
+
+.task-timeline-item:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 36px;
+  bottom: -4px;
+  right: 14px;
+  width: 1px;
+  background: var(--outline-variant);
+}
+
+.task-timeline-icon {
+  position: relative;
+  z-index: 1;
+  width: 30px;
+  height: 30px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--primary);
+  background: var(--primary-fixed);
+}
+
+.task-timeline-icon.moved {
+  color: var(--on-tertiary-fixed-variant);
+  background: var(--tertiary-fixed);
+}
+
+.task-timeline-icon.commented {
+  color: var(--on-secondary-container);
+  background: var(--secondary-container);
+}
+
+.task-timeline-item p {
+  margin: 0 0 4px;
+  color: var(--on-surface-variant);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.task-timeline-item p strong {
+  color: var(--on-surface);
+}
+
+.task-timeline-item time {
+  color: var(--outline);
+  font-size: 0.72rem;
+}
+
 .task-section {
   display: grid;
   gap: 12px;

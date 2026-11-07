@@ -8,6 +8,7 @@ export default function useActiveBoard() {
   const [selectedCardId, setSelectedCardId] = useState('');
   const [selectedCard, setSelectedCard] = useState(null);
   const [comments, setComments] = useState([]);
+  const [cardActivity, setCardActivity] = useState([]);
 
   const moveCardInState = useCallback((cardId, targetColumnId, targetPosition, updatedCard) => {
     setColumns((currentColumns) => {
@@ -68,6 +69,15 @@ export default function useActiveBoard() {
     );
   }, []);
 
+  const mergeCardActivity = useCallback((activity) => {
+    if (!activity) return;
+
+    setCardActivity((currentActivity) => [
+      activity,
+      ...currentActivity.filter((item) => item.id !== activity.id)
+    ]);
+  }, []);
+
   const resetActiveBoard = useCallback(() => {
     setSelectedBoardId('');
     setActiveBoard(null);
@@ -76,6 +86,7 @@ export default function useActiveBoard() {
     setSelectedCardId('');
     setSelectedCard(null);
     setComments([]);
+    setCardActivity([]);
   }, []);
 
   return {
@@ -93,9 +104,12 @@ export default function useActiveBoard() {
     setSelectedCard,
     comments,
     setComments,
+    cardActivity,
+    setCardActivity,
     moveCardInState,
     mergeCardInState,
     removeCardFromState,
+    mergeCardActivity,
     resetActiveBoard
   };
 }

@@ -453,6 +453,33 @@ function getCommentsForCard(cardId) {
     .all(cardId);
 }
 
+function getActivityForCard(cardId, boardId) {
+  return db
+    .prepare(`
+      SELECT
+        activity_logs.id,
+        activity_logs.action,
+        activity_logs.entity_type AS entityType,
+        activity_logs.entity_id AS entityId,
+        activity_logs.metadata,
+        activity_logs.created_at AS createdAt,
+        users.name AS actorName,
+        users.email AS actorEmail
+      FROM activity_logs
+      LEFT JOIN users ON users.id = activity_logs.user_id
+      WHERE activity_logs.board_id = ?
+        AND activity_logs.entity_type = 'card'
+        AND activity_logs.entity_id = ?
+      ORDER BY activity_logs.created_at DESC, activity_logs.rowid DESC
+      LIMIT 50
+    `)
+    .all(boardId, cardId)
+    .map((activity) => ({
+      ...activity,
+      metadata: JSON.parse(activity.metadata || '{}')
+    }));
+}
+
 function getBoardOverviewStats(boardId) {
   const cards = db
     .prepare(`
@@ -1250,7 +1277,13 @@ app.patch('/api/boards/:boardId/cards/:cardId/move', requireAuth, (req, res) => 
     }
 
     db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
-    logActivity(board.id, req.user.id, 'moved', 'card', card.id, { columnId: targetColumn.id });
+    const targetColumnTitle = db
+      .prepare('SELECT title FROM board_columns WHERE id = ?')
+      .get(targetColumn.id)?.title;
+    logActivity(board.id, req.user.id, 'moved', 'card', card.id, {
+      columnId: targetColumn.id,
+      columnTitle: targetColumnTitle
+    });
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');
@@ -1280,16 +1313,18 @@ app.patch('/api/boards/:boardId/cards/:cardId/move', requireAuth, (req, res) => 
     `)
     .get(card.id);
   const serializedMovedCard = serializeCard(movedCard);
+  const activity = getActivityForCard(card.id, board.id);
 
   io.to(`board:${board.id}`).emit('board:card-moved', {
     boardId: board.id,
     card: serializedMovedCard,
     sourceColumnId: card.columnId,
     targetColumnId: targetColumn.id,
-    position: insertAt
+    position: insertAt,
+    activity: activity[0]
   });
 
-  res.json({ card: serializedMovedCard });
+  res.json({ card: serializedMovedCard, activity });
 });
 
 app.get('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
@@ -1307,7 +1342,8 @@ app.get('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
 
   res.json({
     card,
-    comments: getCommentsForCard(card.id)
+    comments: getCommentsForCard(card.id),
+    activity: getActivityForCard(card.id, board.id)
   });
 });
 
@@ -1397,13 +1433,15 @@ app.patch('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
   logActivity(board.id, req.user.id, 'updated', 'card', existingCard.id, { title, priority });
 
   const card = getCardForBoard(existingCard.id, board.id);
+  const activity = getActivityForCard(card.id, board.id);
 
   io.to(`board:${board.id}`).emit('board:card-updated', {
     boardId: board.id,
-    card
+    card,
+    activity: activity[0]
   });
 
-  res.json({ card });
+  res.json({ card, activity });
 });
 
 app.post('/api/boards/:boardId/cards/:cardId/comments', requireAuth, (req, res) => {
@@ -1433,14 +1471,16 @@ app.post('/api/boards/:boardId/cards/:cardId/comments', requireAuth, (req, res) 
   logActivity(board.id, req.user.id, 'commented', 'card', card.id, { title: card.title });
 
   const comment = getCommentsForCard(card.id).find((item) => item.id === commentId);
+  const activity = getActivityForCard(card.id, board.id);
 
   io.to(`board:${board.id}`).emit('board:comment-created', {
     boardId: board.id,
     cardId: card.id,
-    comment
+    comment,
+    activity: activity[0]
   });
 
-  res.status(201).json({ comment });
+  res.status(201).json({ comment, activity });
 });
 
 app.delete('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {

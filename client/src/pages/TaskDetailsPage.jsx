@@ -1,5 +1,24 @@
 import React from 'react';
-import { Calendar, Flag, ListChecks, Tags, UserRound } from 'lucide-react';
+import { Activity, ArrowLeftRight, Calendar, Flag, ListChecks, MessageSquare, Pencil, PlusCircle, UserRound } from 'lucide-react';
+
+const activityIcons = {
+  created: PlusCircle,
+  updated: Pencil,
+  moved: ArrowLeftRight,
+  commented: MessageSquare
+};
+
+function activityDescription(activity) {
+  if (activity.action === 'created') return 'أنشأ البطاقة';
+  if (activity.action === 'updated') return 'حدّث تفاصيل البطاقة أو مهامها';
+  if (activity.action === 'moved') {
+    return activity.metadata?.columnTitle
+      ? `نقل البطاقة إلى «${activity.metadata.columnTitle}»`
+      : 'نقل البطاقة إلى عمود آخر';
+  }
+  if (activity.action === 'commented') return 'أضاف تعليقاً جديداً';
+  return 'أجرى تغييراً على البطاقة';
+}
 
 function TaskDetailsPage({
   selectedCardId,
@@ -17,6 +36,7 @@ function TaskDetailsPage({
   isSavingCardDetails,
   cardDetailsError,
   comments,
+  cardActivity,
   commentBody,
   isAddingComment,
   user,
@@ -291,6 +311,31 @@ function TaskDetailsPage({
                         </form>
 
                         <aside className="task-activity-pane">
+                      <section className="task-timeline" aria-label="سجل نشاط البطاقة">
+                        <div className="task-timeline-heading">
+                          <div>
+                            <Activity size={18} />
+                            <h3>سجل النشاط</h3>
+                          </div>
+                          <span>{cardActivity.length}</span>
+                        </div>
+                        <div className="task-timeline-list">
+                          {cardActivity.length === 0 ? (
+                            <p className="column-empty">لا يوجد نشاط مسجل لهذه البطاقة بعد.</p>
+                          ) : cardActivity.map((activity) => {
+                            const ActivityIcon = activityIcons[activity.action] || Activity;
+                            return (
+                              <article key={activity.id} className="task-timeline-item">
+                                <span className={`task-timeline-icon ${activity.action}`}><ActivityIcon size={15} /></span>
+                                <div>
+                                  <p><strong>{activity.actorName || 'النظام'}</strong> {activityDescription(activity)}</p>
+                                  <time dateTime={activity.createdAt}>{new Date(activity.createdAt).toLocaleString('ar')}</time>
+                                </div>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </section>
                       <section className="comments-panel" aria-label="Card comments">
                         <h3>التعليقات</h3>
                         <form className="comment-form" onSubmit={handleAddComment}>

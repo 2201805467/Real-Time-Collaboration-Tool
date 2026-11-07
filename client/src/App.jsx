@@ -106,9 +106,12 @@ function App() {
     setSelectedCard,
     comments,
     setComments,
+    cardActivity,
+    setCardActivity,
     moveCardInState,
     mergeCardInState,
     removeCardFromState,
+    mergeCardActivity,
     resetActiveBoard
   } = useActiveBoard();
   const [savingBoardId, setSavingBoardId] = useState('');
@@ -275,12 +278,17 @@ function App() {
 
     function handleCardMoved(payload) {
       moveCardInState(payload.card.id, payload.targetColumnId, payload.position, payload.card);
+
+      if (selectedCardId === payload.card.id) {
+        mergeCardActivity(payload.activity);
+      }
     }
 
     function handleCardUpdated(payload) {
       mergeCardInState(payload.card);
 
       if (selectedCardId === payload.card.id) {
+        mergeCardActivity(payload.activity);
         setSelectedCard(payload.card);
         setCardDetailsForm({
           title: payload.card.title,
@@ -296,6 +304,10 @@ function App() {
     }
 
     function handleCommentCreated(payload) {
+      if (selectedCardId === payload.cardId) {
+        mergeCardActivity(payload.activity);
+      }
+
       setComments((currentComments) => {
         if (
           selectedCardId !== payload.cardId ||
@@ -949,6 +961,7 @@ function App() {
     setSelectedCardId(cardId);
     setSelectedCard(null);
     setComments([]);
+    setCardActivity([]);
     setCardDetailsError('');
     setActiveSidebarSection('task');
     setIsLoadingCardDetails(true);
@@ -967,6 +980,7 @@ function App() {
         checklist: data.card.checklist || []
       });
       setComments(data.comments);
+      setCardActivity(data.activity || []);
     } catch (error) {
       setCardDetailsError(error.message);
     } finally {
@@ -978,6 +992,7 @@ function App() {
     setSelectedCardId('');
     setSelectedCard(null);
     setComments([]);
+    setCardActivity([]);
     setCommentBody('');
     setCardDetailsError('');
     setActiveSidebarSection(selectedBoardId ? 'kanban' : 'overview');
@@ -1069,6 +1084,7 @@ function App() {
 
       setSelectedCard(data.card);
       mergeCardInState(data.card);
+      setCardActivity(data.activity || []);
       loadWorkspaceOverview();
     } catch (error) {
       setCardDetailsError(error.message);
@@ -1115,6 +1131,7 @@ function App() {
           ? currentComments
           : [...currentComments, data.comment]
       );
+      setCardActivity(data.activity || []);
       loadWorkspaceOverview();
       setCommentBody('');
     } catch (error) {
@@ -1471,6 +1488,7 @@ function App() {
                   isSavingCardDetails={isSavingCardDetails}
                   cardDetailsError={cardDetailsError}
                   comments={comments}
+                  cardActivity={cardActivity}
                   commentBody={commentBody}
                   isAddingComment={isAddingComment}
                   user={user}

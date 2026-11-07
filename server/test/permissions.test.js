@@ -221,6 +221,31 @@ test('owner, manager, and member permissions follow the project hierarchy', asyn
   assert.equal(managerAddsTask.status, 200);
   assert.equal(managerAddsTask.data.card.checklist.length, 2);
 
+  const memberComment = await api(`/api/boards/${boardId}/cards/${cardId}/comments`, {
+    method: 'POST',
+    token: member.token,
+    body: { body: 'Task completed and reviewed' }
+  });
+  assert.equal(memberComment.status, 201);
+
+  const movedCard = await api(`/api/boards/${boardId}/cards/${cardId}/move`, {
+    method: 'PATCH',
+    token: owner.token,
+    body: { columnId: board.data.columns[1].id, position: 0 }
+  });
+  assert.equal(movedCard.status, 200);
+
+  const cardDetails = await api(`/api/boards/${boardId}/cards/${cardId}`, {
+    token: owner.token
+  });
+  assert.equal(cardDetails.status, 200);
+  assert.ok(cardDetails.data.activity.some((item) => item.action === 'created' && item.actorName === 'Owner'));
+  assert.ok(cardDetails.data.activity.some((item) => item.action === 'updated'));
+  assert.ok(cardDetails.data.activity.some((item) => item.action === 'commented' && item.actorName === 'Member'));
+  assert.ok(cardDetails.data.activity.some(
+    (item) => item.action === 'moved' && item.metadata.columnTitle === 'In Progress'
+  ));
+
   const boardSummaries = await api('/api/boards', { token: owner.token });
   assert.equal(boardSummaries.status, 200);
   const boardSummary = boardSummaries.data.boards.find((item) => item.id === boardId);
