@@ -7,6 +7,7 @@ import {
   LifeBuoy,
   Moon,
   Settings,
+  Sun,
   UsersRound
 } from 'lucide-react';
 
@@ -20,6 +21,7 @@ function WorkspaceChrome({
   isConnected,
   presenceUsers,
   userIsBoardOwner,
+  isDarkMode,
   notifications,
   unreadNotificationsCount,
   isLoadingNotifications,
@@ -27,7 +29,8 @@ function WorkspaceChrome({
   onBoardChange,
   onNavigate,
   onOpenNotification,
-  onMarkAllNotificationsRead
+  onMarkAllNotificationsRead,
+  onToggleTheme
 }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const notificationsMenuRef = useRef(null);
@@ -142,9 +145,9 @@ function WorkspaceChrome({
             <LifeBuoy className="nav-icon" size={20} aria-hidden="true" />
             الدعم الفني والتوثيق
           </button>
-          <button type="button" className="dark-toggle">
-            <Moon className="nav-icon" size={20} aria-hidden="true" />
-            الوضع المظلم
+          <button type="button" className={isDarkMode ? 'dark-toggle active' : 'dark-toggle'} onClick={onToggleTheme} aria-pressed={isDarkMode}>
+            {isDarkMode ? <Sun className="nav-icon" size={20} aria-hidden="true" /> : <Moon className="nav-icon" size={20} aria-hidden="true" />}
+            {isDarkMode ? 'الوضع الفاتح' : 'الوضع المظلم'}
             <span className="toggle-track"><span /></span>
           </button>
           <div className="socket-status">

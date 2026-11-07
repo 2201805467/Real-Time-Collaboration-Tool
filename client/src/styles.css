@@ -9,11 +9,17 @@
   --surface-low: #f2f3ff;
   --surface-lowest: #ffffff;
   --surface-container: #eaedff;
+  --surface-container-low: #f2f3ff;
+  --surface-container-lowest: #ffffff;
+  --surface-container-high: #e2e7ff;
+  --surface-container-highest: #dae2fd;
   --surface-high: #e2e7ff;
   --surface-highest: #dae2fd;
   --primary: #3525cd;
   --primary-container: #4f46e5;
   --primary-fixed: #e2dfff;
+  --on-primary-fixed: #0f0069;
+  --on-primary-fixed-variant: #3323cc;
   --on-primary-container: #dad7ff;
   --on-surface: #131b2e;
   --on-surface-variant: #464555;
@@ -21,9 +27,13 @@
   --outline-variant: #c7c4d8;
   --secondary: #006c49;
   --secondary-container: #6cf8bb;
+  --on-secondary-container: #00714d;
   --tertiary-container: #b6166f;
+  --tertiary-fixed: #ffd9e4;
+  --on-tertiary-fixed-variant: #8c0053;
   --error: #ba1a1a;
   --error-container: #ffdad6;
+  --on-error-container: #93000a;
   --shadow-soft: 0 1px 8px rgb(0 0 0 / 0.04);
   --shadow-card: 0 6px 18px rgb(19 27 46 / 0.06);
   color: var(--on-surface);
@@ -31,6 +41,180 @@
   font-family: "IBM Plex Sans Arabic", "IBM Plex Sans", "Segoe UI", Tahoma, Arial, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+}
+
+/* Dark theme overrides for legacy and Tailwind-generated surfaces. */
+:root[data-theme="dark"] .workspace-topbar {
+  background: rgb(16 18 27 / 0.88);
+}
+
+:root[data-theme="dark"] :is(
+  .demo-panel,
+  .dashboard-panel,
+  .invite-panel,
+  .share-panel,
+  .team-panel,
+  .team-table,
+  .team-row,
+  .team-hero,
+  .team-radar,
+  .team-metric-card,
+  .team-invite-link,
+  .team-radar-grid article,
+  .board-tools,
+  .filter-panel,
+  .add-column-form,
+  .session-bar,
+  .board-card,
+  .kanban-column header span,
+  .task-card,
+  .card-details,
+  .comment-card,
+  .editable-tag-list button
+) {
+  border-color: var(--outline-variant);
+  color: var(--on-surface);
+  background: var(--surface-lowest);
+}
+
+:root[data-theme="dark"] :is(
+  .team-invite-link,
+  .team-radar-grid article,
+  .team-tabs button,
+  .member-status,
+  .comment-card
+) {
+  background: var(--surface-container-low);
+}
+
+:root[data-theme="dark"] :is(
+  .invite-panel h2,
+  .share-panel h3,
+  .team-panel-header h3,
+  .team-hero h3,
+  .team-radar h4,
+  .team-radar-grid strong,
+  .task-card h4,
+  .card-details-header h3,
+  .tags-editor-header h4,
+  .checklist-header h4,
+  .kanban-column h3
+) {
+  color: var(--on-surface);
+}
+
+:root[data-theme="dark"] :is(
+  .invite-panel p,
+  .share-panel p,
+  .team-member span,
+  .team-hero p,
+  .team-radar p,
+  .team-radar-grid p,
+  .session-bar p,
+  .board-card p,
+  .task-card p,
+  .column-empty,
+  .tags-editor-header span,
+  .comment-card p,
+  .comment-card time,
+  .section-copy,
+  .team-empty
+) {
+  color: var(--on-surface-variant);
+}
+
+:root[data-theme="dark"] .form-error {
+  border-color: #7f3439;
+  color: #ffc3bd;
+  background: #431b20;
+}
+
+:root[data-theme="dark"] .form-success {
+  border-color: #28694f;
+  color: #9cebc8;
+  background: #123d2e;
+}
+
+:root[data-theme="dark"] .role-badge {
+  color: #d7d2ff;
+  background: #35305c;
+}
+
+:root[data-theme="dark"] .role-badge.owner,
+:root[data-theme="dark"] :is(.priority-medium, .due-date) {
+  color: #ffd59a;
+  background: #4a3519;
+}
+
+:root[data-theme="dark"] :is(.priority-normal, .checklist-badge) {
+  color: #9cebc8;
+  background: #173f31;
+}
+
+:root[data-theme="dark"] :is(.tag-list span, .editable-tag-list span) {
+  color: #d7d2ff;
+  background: #35305c;
+}
+
+:root[data-theme="dark"] :is(.danger-button, .icon-danger-button) {
+  color: #ffc3bd;
+  background: #512127;
+}
+
+:root[data-theme="dark"] :is(.danger-button, .icon-danger-button):hover {
+  background: #672a31;
+}
+
+:root[data-theme="dark"] .bg-surface-container-lowest { background-color: var(--surface-container-lowest); }
+:root[data-theme="dark"] .bg-surface-container-low { background-color: var(--surface-container-low); }
+:root[data-theme="dark"] .bg-surface-container { background-color: var(--surface-container); }
+:root[data-theme="dark"] .bg-surface-container-high { background-color: var(--surface-container-high); }
+:root[data-theme="dark"] .bg-surface-container-highest { background-color: var(--surface-container-highest); }
+:root[data-theme="dark"] .bg-primary-fixed { background-color: var(--primary-fixed); }
+:root[data-theme="dark"] .bg-primary-container { background-color: var(--primary-container); }
+:root[data-theme="dark"] .bg-secondary-container { background-color: var(--secondary-container); }
+:root[data-theme="dark"] .bg-tertiary-fixed { background-color: var(--tertiary-fixed); }
+:root[data-theme="dark"] .bg-error-container { background-color: var(--error-container); }
+:root[data-theme="dark"] .text-on-surface { color: var(--on-surface); }
+:root[data-theme="dark"] .text-on-surface-variant { color: var(--on-surface-variant); }
+:root[data-theme="dark"] .text-primary { color: var(--primary); }
+:root[data-theme="dark"] .text-on-primary-fixed-variant { color: var(--on-primary-fixed-variant); }
+:root[data-theme="dark"] .text-on-secondary-container { color: var(--on-secondary-container); }
+:root[data-theme="dark"] .text-on-tertiary-fixed-variant { color: var(--on-tertiary-fixed-variant); }
+:root[data-theme="dark"] .text-on-error-container { color: var(--on-error-container); }
+
+:root[data-theme="dark"] {
+  --surface: #10121b;
+  --surface-low: #151824;
+  --surface-lowest: #1b1e2b;
+  --surface-container: #242838;
+  --surface-container-low: #171a26;
+  --surface-container-lowest: #1b1e2b;
+  --surface-container-high: #2c3042;
+  --surface-container-highest: #363b50;
+  --surface-high: #2c3042;
+  --surface-highest: #363b50;
+  --primary: #c7c1ff;
+  --primary-container: #6f63ff;
+  --primary-fixed: #302b58;
+  --on-primary-container: #ffffff;
+  --on-primary-fixed: #e5e1ff;
+  --on-primary-fixed-variant: #d1cbff;
+  --on-surface: #e8e9f4;
+  --on-surface-variant: #c6c5d4;
+  --outline: #9695a8;
+  --outline-variant: #45485b;
+  --secondary: #68e5b0;
+  --secondary-container: #174f3c;
+  --on-secondary-container: #a6f3d0;
+  --tertiary-container: #d94b94;
+  --tertiary-fixed: #4d263b;
+  --on-tertiary-fixed-variant: #ffc1dc;
+  --error: #ffb4ab;
+  --error-container: #5f2024;
+  --on-error-container: #ffd9d5;
+  --shadow-soft: 0 1px 10px rgb(0 0 0 / 0.28);
+  --shadow-card: 0 8px 24px rgb(0 0 0 / 0.3);
 }
 
 * {
@@ -2441,6 +2625,15 @@ button:disabled {
   border-radius: 50%;
   background: var(--surface-lowest);
   box-shadow: var(--shadow-soft);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.dark-toggle.active .toggle-track {
+  background: var(--primary-container);
+}
+
+.dark-toggle.active .toggle-track span {
+  transform: translateX(-16px);
 }
 
 .socket-status {

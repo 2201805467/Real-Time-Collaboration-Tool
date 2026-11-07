@@ -13,6 +13,7 @@ import useAuthSession from './hooks/useAuthSession.js';
 import useActiveBoard from './hooks/useActiveBoard.js';
 import useBoardSocket from './hooks/useBoardSocket.js';
 import useNotifications from './hooks/useNotifications.js';
+import useTheme from './hooks/useTheme.js';
 import useWorkspaceData from './hooks/useWorkspaceData.js';
 
 const priorityLabels = {
@@ -52,6 +53,7 @@ function getWorkspaceRoute(pathname) {
 }
 
 function App() {
+  const { isDarkMode, toggleTheme } = useTheme();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const location = useLocation();
   const navigate = useNavigate();
@@ -1252,6 +1254,7 @@ function App() {
           isConnected={isConnected}
           presenceUsers={presenceUsers}
           userIsBoardOwner={userIsBoardOwner}
+          isDarkMode={isDarkMode}
           notifications={notifications}
           unreadNotificationsCount={unreadNotificationsCount}
           isLoadingNotifications={isLoadingNotifications}
@@ -1260,6 +1263,7 @@ function App() {
           onNavigate={navigateToSection}
           onOpenNotification={handleOpenNotification}
           onMarkAllNotificationsRead={markAllNotificationsRead}
+          onToggleTheme={toggleTheme}
         />
       ) : null}
 

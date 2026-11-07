@@ -1,0 +1,218 @@
+:root[data-theme="dark"] {
+  --surface: #0c0f18;
+  --surface-low: #121624;
+  --surface-lowest: #181d2c;
+  --surface-container: #202638;
+  --surface-container-low: #151a28;
+  --surface-container-lowest: #181d2c;
+  --surface-container-high: #293149;
+  --surface-container-highest: #343d59;
+  --surface-high: #293149;
+  --surface-highest: #343d59;
+  --primary: #a79dff;
+  --primary-container: #7567f4;
+  --primary-fixed: #302b5a;
+  --outline: #9299ad;
+  --outline-variant: #343c53;
+  --shadow-soft: 0 5px 20px rgb(0 0 0 / 0.24);
+  --shadow-card: 0 12px 30px rgb(0 0 0 / 0.3);
+}
+
+:root[data-theme="dark"] body,
+:root[data-theme="dark"] .workspace-shell {
+  background:
+    radial-gradient(circle at 20% 0%, rgb(117 103 244 / 0.08), transparent 30rem),
+    var(--surface);
+}
+
+:root[data-theme="dark"] :is(
+  .hub-metrics article,
+  .hub-create-card,
+  .hub-board-card,
+  .hub-side-panel > section,
+  .team-metric-card,
+  .team-radar,
+  .team-table,
+  .task-details-page,
+  .share-dialog,
+  .notifications-popover
+) {
+  border-color: #343c53;
+  background: linear-gradient(145deg, #1b2030, #171b29);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.2);
+}
+
+:root[data-theme="dark"] .hub-metrics article {
+  background: linear-gradient(145deg, #1c2233, #171b29);
+}
+
+:root[data-theme="dark"] :is(.hub-metrics article, .hub-board-card, .team-metric-card):hover {
+  border-color: #514a80;
+  box-shadow: 0 14px 34px rgb(0 0 0 / 0.28);
+}
+
+:root[data-theme="dark"] :is(.hub-metrics article > span, .hub-board-icon) {
+  color: #c4bdff;
+  background: linear-gradient(145deg, #393169, #2d2853);
+}
+
+:root[data-theme="dark"] .hub-board-accent {
+  background: linear-gradient(90deg, #7567f4, #b84988, #2d9a76);
+}
+
+:root[data-theme="dark"] .hub-board-card {
+  background: linear-gradient(155deg, #1c2233 0%, #171b29 70%);
+}
+
+:root[data-theme="dark"] .hub-command-bar,
+:root[data-theme="dark"] .hub-search,
+:root[data-theme="dark"] .hub-action-grid button {
+  border-color: #30384e;
+  background: #141927;
+}
+
+:root[data-theme="dark"] :is(
+  .workspace-hub .hub-actions > button:not(.secondary-button),
+  .hub-create-card > button,
+  .add-column-form > button,
+  .card-form > button,
+  .details-form > button[type="submit"],
+  .comment-form > button[type="submit"],
+  .share-dialog-intro > button,
+  .team-actions > button:not(.secondary-button)
+) {
+  border: 1px solid #8d82ff;
+  color: #ffffff;
+  background: linear-gradient(135deg, #8072ff, #6555e8);
+  box-shadow: 0 8px 20px rgb(87 70 220 / 0.28);
+}
+
+:root[data-theme="dark"] :is(
+  .workspace-hub .hub-actions > button:not(.secondary-button),
+  .hub-create-card > button,
+  .add-column-form > button,
+  .card-form > button,
+  .details-form > button[type="submit"],
+  .comment-form > button[type="submit"],
+  .share-dialog-intro > button,
+  .team-actions > button:not(.secondary-button)
+):hover:not(:disabled) {
+  background: linear-gradient(135deg, #9187ff, #7566f3);
+  box-shadow: 0 10px 26px rgb(100 82 232 / 0.38);
+  transform: translateY(-1px);
+}
+
+:root[data-theme="dark"] :is(
+  .secondary-button,
+  .small-button,
+  .icon-button,
+  .icon-plain-button
+) {
+  border-color: #3b445d;
+  color: #d8d9e7;
+  background: #22283a;
+}
+
+:root[data-theme="dark"] :is(.secondary-button, .small-button, .icon-button, .icon-plain-button):hover:not(:disabled) {
+  color: #ffffff;
+  background: #303850;
+}
+
+:root[data-theme="dark"] .hub-tabs button.active {
+  color: #ffffff;
+  background: linear-gradient(135deg, #8072ff, #6555e8);
+  box-shadow: 0 7px 18px rgb(87 70 220 / 0.3);
+}
+
+:root[data-theme="dark"] :is(input, select, textarea) {
+  border-color: #3a435b;
+  color: #ececf5;
+  background: #141927;
+}
+
+:root[data-theme="dark"] :is(input, select, textarea)::placeholder {
+  color: #8f96aa;
+}
+
+:root[data-theme="dark"] :is(input, select, textarea):focus {
+  border-color: #8175fa;
+  outline-color: rgb(129 117 250 / 0.24);
+}
+
+/* Kanban: keep the columns and cards clearly separated without light gray panels. */
+:root[data-theme="dark"] .kanban-column {
+  border: 1px solid #303950 !important;
+  background: linear-gradient(180deg, #1b2131, #161b29) !important;
+  box-shadow: 0 12px 34px rgb(0 0 0 / 0.24) !important;
+}
+
+:root[data-theme="dark"] .kanban-column.over {
+  border-color: #7d71f8 !important;
+  background: linear-gradient(180deg, #242544, #1b2032) !important;
+  box-shadow: 0 0 0 3px rgb(125 113 248 / 0.16) !important;
+}
+
+:root[data-theme="dark"] .task-card {
+  border: 1px solid #303950;
+  color: #f0f0f7;
+  background: linear-gradient(150deg, #22283a, #1b2030) !important;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.24) !important;
+}
+
+:root[data-theme="dark"] .task-card:hover {
+  border-color: #5a5584;
+  background: linear-gradient(150deg, #282f44, #202638) !important;
+  box-shadow: 0 14px 30px rgb(0 0 0 / 0.32) !important;
+}
+
+:root[data-theme="dark"] .task-card :is(.bg-surface-container-low, .bg-surface-container) {
+  background-color: #171c2a !important;
+}
+
+:root[data-theme="dark"] .column-title-form input {
+  color: #f1f1f8 !important;
+  background: transparent !important;
+}
+
+:root[data-theme="dark"] .column-header .small-button {
+  border: 1px solid #4a456e;
+  color: #c9c3ff;
+  background: #292744;
+}
+
+:root[data-theme="dark"] .card-form input,
+:root[data-theme="dark"] .add-column-form input {
+  background: #141927;
+}
+
+:root[data-theme="dark"] .card-form > button {
+  border-color: #3f4862;
+  color: #ddd9ff;
+  background: linear-gradient(135deg, #292f45, #242a3e);
+  box-shadow: none;
+}
+
+:root[data-theme="dark"] .card-form > button:hover:not(:disabled) {
+  border-color: #6f64d8;
+  background: linear-gradient(135deg, #353b55, #2d334b);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.24);
+}
+
+:root[data-theme="dark"] :is(.danger-button, .icon-danger-button) {
+  border: 1px solid #773a43;
+  color: #ffc2c0;
+  background: #51242b;
+}
+
+:root[data-theme="dark"] :is(.danger-button, .icon-danger-button):hover:not(:disabled) {
+  background: #682e37;
+}
+
+:root[data-theme="dark"] .storage-track {
+  background: #2b3248;
+}
+
+:root[data-theme="dark"] .storage-track span,
+:root[data-theme="dark"] .hub-board-progress > div:nth-child(2) span {
+  background: linear-gradient(90deg, #7567f4, #9a8fff);
+}
