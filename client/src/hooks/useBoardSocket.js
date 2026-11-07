@@ -76,6 +76,7 @@ export default function useBoardSocket({
 
     function handlePresence(payload) {
       setPresenceUsers(payload.users || []);
+      handlersRef.current?.['board:presence']?.(payload);
     }
 
     socket.on('connect', handleConnect);

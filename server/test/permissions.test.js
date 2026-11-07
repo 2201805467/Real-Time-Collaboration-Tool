@@ -5,6 +5,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { after, before, test } from 'node:test';
+import { io as createSocket } from 'socket.io-client';
 
 const serverDirectory = join(dirname(fileURLToPath(import.meta.url)), '..');
 const temporaryDirectory = mkdtempSync(join(tmpdir(), 'collab-tool-test-'));
@@ -13,6 +14,41 @@ const port = 42000 + (process.pid % 1000);
 const baseUrl = `http://127.0.0.1:${port}`;
 let serverProcess;
 let serverOutput = '';
+
+function waitForPresence(socket, predicate) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      socket.off('board:presence', handlePresence);
+      reject(new Error('Timed out waiting for board presence update'));
+    }, 5000);
+
+    function handlePresence(payload) {
+      if (!predicate(payload)) return;
+      clearTimeout(timeout);
+      socket.off('board:presence', handlePresence);
+      resolve(payload);
+    }
+
+    socket.on('board:presence', handlePresence);
+  });
+}
+
+function connectSocket(token) {
+  return new Promise((resolve, reject) => {
+    const socket = createSocket(baseUrl, { auth: { token }, forceNew: true });
+    socket.once('connect', () => resolve(socket));
+    socket.once('connect_error', reject);
+  });
+}
+
+function joinBoard(socket, boardId) {
+  return new Promise((resolve, reject) => {
+    socket.emit('board:join', { boardId }, (result) => {
+      if (result?.ok) resolve();
+      else reject(new Error(result?.message || 'Could not join board'));
+    });
+  });
+}
 
 async function waitForServer() {
   const deadline = Date.now() + 10000;
@@ -153,6 +189,50 @@ test('owner, manager, and member permissions follow the project hierarchy', asyn
   });
   assert.equal(promoted.status, 200);
   assert.equal(promoted.data.member.role, 'manager');
+
+  const firstManagerSocket = await connectSocket(manager.token);
+  const firstPresence = waitForPresence(
+    firstManagerSocket,
+    (payload) => payload.users.some((item) => item.id === manager.user.id)
+  );
+  await joinBoard(firstManagerSocket, boardId);
+  await firstPresence;
+
+  const duplicatePresence = waitForPresence(
+    firstManagerSocket,
+    (payload) => payload.users.some(
+      (item) => item.id === manager.user.id && item.connectionCount === 2
+    )
+  );
+  const secondManagerSocket = await connectSocket(manager.token);
+  await joinBoard(secondManagerSocket, boardId);
+  const duplicatePresencePayload = await duplicatePresence;
+  assert.equal(
+    duplicatePresencePayload.users.filter((item) => item.id === manager.user.id).length,
+    1
+  );
+
+  const remainingPresence = waitForPresence(
+    secondManagerSocket,
+    (payload) => payload.users.some(
+      (item) => item.id === manager.user.id && item.connectionCount === 1
+    )
+  );
+  firstManagerSocket.disconnect();
+  await remainingPresence;
+  secondManagerSocket.disconnect();
+
+  let managerLastSeen = null;
+  for (let attempt = 0; attempt < 20 && !managerLastSeen; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const membersAfterDisconnect = await api(`/api/boards/${boardId}/members`, {
+      token: owner.token
+    });
+    managerLastSeen = membersAfterDisconnect.data.members.find(
+      (item) => item.id === manager.user.id
+    )?.lastSeen;
+  }
+  assert.ok(managerLastSeen);
 
   const managerCannotRenameBoard = await api(`/api/boards/${boardId}`, {
     method: 'PATCH',

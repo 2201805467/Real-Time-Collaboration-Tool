@@ -417,6 +417,17 @@ function App() {
       setBoardsError('تمت إزالة عضويتك من هذه اللوحة.');
     }
 
+    function handlePresenceUpdated(payload) {
+      const lastSeenByUser = new Map(
+        (payload.memberStatuses || []).map((member) => [member.userId, member.lastSeen])
+      );
+      setBoardMembers((currentMembers) => currentMembers.map((member) =>
+        lastSeenByUser.has(member.id)
+          ? { ...member, lastSeen: lastSeenByUser.get(member.id) }
+          : member
+      ));
+    }
+
     function handleNotificationCreated(payload) {
       receiveNotification(payload.notification);
     }
@@ -439,6 +450,7 @@ function App() {
       'board:member-updated': handleMemberUpdated,
       'board:comment-created': handleCommentCreated,
       'board:access-revoked': handleAccessRevoked,
+      'board:presence': handlePresenceUpdated,
       'notification:created': handleNotificationCreated
     },
     onUnauthorized: handleUnauthorizedSocket,

@@ -42,34 +42,60 @@ io.use((socket, next) => {
 });
 
 function getPresenceList(boardId) {
-  return Array.from(boardPresence.get(boardId)?.values() || []);
+  return Array.from(boardPresence.get(boardId)?.values() || []).map((presence) => ({
+    id: presence.id,
+    name: presence.name,
+    email: presence.email,
+    socketId: presence.socketIds.values().next().value,
+    connectionCount: presence.socketIds.size
+  }));
 }
 
 function emitPresence(boardId) {
+  const memberStatuses = db.prepare(`
+    SELECT user_id AS userId, last_seen AS lastSeen
+    FROM board_members
+    WHERE board_id = ?
+  `).all(boardId);
+
   io.to(`board:${boardId}`).emit('board:presence', {
     boardId,
-    users: getPresenceList(boardId)
+    users: getPresenceList(boardId),
+    memberStatuses
   });
+}
+
+function removeSocketFromBoardPresence(boardId, socket) {
+  const users = boardPresence.get(boardId);
+  const userId = socket.data.user?.id;
+  const presence = users?.get(userId);
+
+  if (!presence) {
+    return;
+  }
+
+  presence.socketIds.delete(socket.id);
+
+  if (presence.socketIds.size === 0) {
+    users.delete(userId);
+    db.prepare(`
+      UPDATE board_members
+      SET last_seen = CURRENT_TIMESTAMP
+      WHERE board_id = ? AND user_id = ?
+    `).run(boardId, userId);
+  }
+
+  if (users.size === 0) {
+    boardPresence.delete(boardId);
+  }
+
+  emitPresence(boardId);
 }
 
 function removeSocketFromPresence(socket) {
   const joinedBoards = socket.data.joinedBoards || new Set();
 
-  joinedBoards.forEach((boardId) => {
-    const users = boardPresence.get(boardId);
-
-    if (!users) {
-      return;
-    }
-
-    users.delete(socket.id);
-
-    if (users.size === 0) {
-      boardPresence.delete(boardId);
-    }
-
-    emitPresence(boardId);
-  });
+  joinedBoards.forEach((boardId) => removeSocketFromBoardPresence(boardId, socket));
 
   socket.data.joinedBoards = new Set();
 }
@@ -86,7 +112,7 @@ function revokeBoardAccess(boardId, userId) {
     socket.emit('board:access-revoked', { boardId });
     socket.leave(roomName);
     socket.data.joinedBoards.delete(boardId);
-    users?.delete(socket.id);
+    users?.delete(userId);
   });
 
   if (users?.size === 0) {
@@ -500,7 +526,8 @@ function getBoardMembers(boardId) {
         users.name,
         users.email,
         board_members.role,
-        board_members.joined_at AS joinedAt
+        board_members.joined_at AS joinedAt,
+        board_members.last_seen AS lastSeen
       FROM board_members
       INNER JOIN users ON users.id = board_members.user_id
       WHERE board_members.board_id = ?
@@ -1697,12 +1724,19 @@ io.on('connection', (socket) => {
       boardPresence.set(boardId, new Map());
     }
 
-    boardPresence.get(boardId).set(socket.id, {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      socketId: socket.id
-    });
+    const boardUsers = boardPresence.get(boardId);
+    const existingPresence = boardUsers.get(user.id);
+
+    if (existingPresence) {
+      existingPresence.socketIds.add(socket.id);
+    } else {
+      boardUsers.set(user.id, {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        socketIds: new Set([socket.id])
+      });
+    }
 
     emitPresence(boardId);
     acknowledge?.({ ok: true });
@@ -1712,17 +1746,7 @@ io.on('connection', (socket) => {
     socket.leave(`board:${boardId}`);
     socket.data.joinedBoards.delete(boardId);
 
-    const users = boardPresence.get(boardId);
-
-    if (users) {
-      users.delete(socket.id);
-
-      if (users.size === 0) {
-        boardPresence.delete(boardId);
-      }
-    }
-
-    emitPresence(boardId);
+    removeSocketFromBoardPresence(boardId, socket);
   });
 
   socket.on('demo:message', (payload) => {

@@ -13,6 +13,21 @@ import {
   Zap
 } from 'lucide-react';
 
+function formatLastSeen(lastSeen) {
+  if (!lastSeen) return 'لم يُسجل ظهور سابق';
+
+  const normalized = lastSeen.includes('T')
+    ? lastSeen
+    : `${lastSeen.replace(' ', 'T')}Z`;
+  const date = new Date(normalized);
+
+  if (Number.isNaN(date.getTime())) return 'آخر ظهور غير متاح';
+  return `آخر ظهور: ${date.toLocaleString('ar-LY', {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  })}`;
+}
+
 function TeamPage({
   userIsBoardOwner,
   isCreatingInvite,
@@ -107,7 +122,7 @@ function TeamPage({
           <div className="team-radar-icon"><Radar size={20} /></div>
           <div>
             <h4>رادار الحضور التشاركي المباشر</h4>
-            <p>كل عضو متصل يظهر هنا فوراً، ويتم تحديث العدد مع فتح اللوحة في أكثر من نافذة.</p>
+            <p>كل عضو متصل يظهر مرة واحدة، حتى عند فتح اللوحة في أكثر من نافذة.</p>
           </div>
           <span><span className="live-dot" /> WebSocket Live</span>
         </div>
@@ -196,7 +211,7 @@ function TeamPage({
                 <div className="team-current-board">
                   <KanbanSquare size={16} />
                   <span>{activeBoardTitle}</span>
-                  <small>{isOnline ? 'نشط في هذه اللحظة' : 'آخر ظهور غير متاح'}</small>
+                  <small>{isOnline ? 'نشط في هذه اللحظة' : formatLastSeen(member.lastSeen)}</small>
                 </div>
                 <div className="team-row-actions">
                   <button type="button" className="icon-button" aria-label="تنبيه العضو">
