@@ -453,6 +453,39 @@ function getCommentsForCard(cardId) {
     .all(cardId);
 }
 
+function getBoardOverviewStats(boardId) {
+  const cards = db
+    .prepare(`
+      SELECT cards.checklist, board_columns.title AS columnTitle
+      FROM cards
+      INNER JOIN board_columns ON board_columns.id = cards.column_id
+      WHERE board_columns.board_id = ?
+        AND cards.deleted_at IS NULL
+    `)
+    .all(boardId);
+  const members = getBoardMembers(boardId);
+  const completedCards = cards.filter((card) => isCompletionColumnTitle(card.columnTitle)).length;
+  const checklist = cards.flatMap((card) => parseJsonList(card.checklist));
+  const completedSubtasks = checklist.filter((item) => item.status === 'done' || item.done).length;
+  const totalWorkItems = cards.length + checklist.length;
+  const completedWorkItems = completedCards + completedSubtasks;
+
+  return {
+    cardsTotal: cards.length,
+    cardsCompleted: completedCards,
+    subtasksTotal: checklist.length,
+    subtasksCompleted: completedSubtasks,
+    progress: totalWorkItems
+      ? Math.round((completedWorkItems / totalWorkItems) * 1000) / 10
+      : 0,
+    memberCount: members.length,
+    memberPreview: members.slice(0, 3).map((member) => ({
+      id: member.id,
+      name: member.name
+    }))
+  };
+}
+
 app.get('/api/boards', requireAuth, (req, res) => {
   const boards = db
     .prepare(`
@@ -467,7 +500,11 @@ app.get('/api/boards', requireAuth, (req, res) => {
       WHERE board_members.user_id = ?
       ORDER BY boards.updated_at DESC
     `)
-    .all(req.user.id);
+    .all(req.user.id)
+    .map((board) => ({
+      ...board,
+      stats: getBoardOverviewStats(board.id)
+    }));
 
   res.json({ boards });
 });

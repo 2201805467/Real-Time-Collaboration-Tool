@@ -1346,19 +1346,25 @@ button:disabled {
   font-weight: 700;
 }
 
-.hub-board-progress > div:last-child {
+.hub-board-progress > div:nth-child(2) {
   height: 5px;
   overflow: hidden;
   border-radius: 999px;
   background: var(--surface-container);
 }
 
-.hub-board-progress > div:last-child span {
+.hub-board-progress > div:nth-child(2) span {
   display: block;
   height: 100%;
   padding: 0;
   border-radius: inherit;
   background: var(--primary-container);
+}
+
+.hub-board-progress > small {
+  color: var(--on-surface-variant);
+  font-size: 0.74rem;
+  line-height: 1.5;
 }
 
 .hub-board-footer > span {

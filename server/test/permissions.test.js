@@ -220,4 +220,16 @@ test('owner, manager, and member permissions follow the project hierarchy', asyn
   });
   assert.equal(managerAddsTask.status, 200);
   assert.equal(managerAddsTask.data.card.checklist.length, 2);
+
+  const boardSummaries = await api('/api/boards', { token: owner.token });
+  assert.equal(boardSummaries.status, 200);
+  const boardSummary = boardSummaries.data.boards.find((item) => item.id === boardId);
+  assert.ok(boardSummary);
+  assert.equal(boardSummary.stats.cardsTotal, 1);
+  assert.equal(boardSummary.stats.cardsCompleted, 0);
+  assert.equal(boardSummary.stats.subtasksTotal, 2);
+  assert.equal(boardSummary.stats.subtasksCompleted, 1);
+  assert.equal(boardSummary.stats.progress, 33.3);
+  assert.equal(boardSummary.stats.memberCount, 3);
+  assert.equal(boardSummary.stats.memberPreview.length, 3);
 });

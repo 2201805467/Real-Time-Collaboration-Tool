@@ -22,10 +22,12 @@ export default function useWorkspaceData(token, user) {
     }
 
     try {
-      const [statsData, activityData] = await Promise.all([
+      const [boardsData, statsData, activityData] = await Promise.all([
+        getBoards(token),
         getWorkspaceStats(token),
         getWorkspaceActivity(token)
       ]);
+      setBoards(boardsData.boards || []);
       setWorkspaceStats(statsData.stats || emptyWorkspaceStats);
       setWorkspaceActivity(activityData.activity || []);
     } catch (error) {
@@ -42,8 +44,6 @@ export default function useWorkspaceData(token, user) {
     setIsLoadingBoards(true);
 
     try {
-      const data = await getBoards(token);
-      setBoards(data.boards);
       await loadWorkspaceOverview();
     } catch (error) {
       setBoardsError(error.message);

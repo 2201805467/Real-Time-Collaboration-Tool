@@ -173,7 +173,7 @@ function WorkspaceOverviewPage({
                   : 'لا توجد مشاريع تطابق البحث أو التصفية الحالية.'}
               </p>
             ) : (
-              displayedBoards.map((board, index) => (
+              displayedBoards.map((board) => (
                 <article key={board.id} className="board-card hub-board-card">
                   <span className="hub-board-accent" />
                   <div className="hub-board-topline">
@@ -182,7 +182,8 @@ function WorkspaceOverviewPage({
                   </div>
                   <div>
                     <div className="hub-board-tags">
-                      <span>UI System</span>
+                      <span>{board.stats?.cardsTotal || 0} بطاقة</span>
+                      <span>{board.stats?.subtasksTotal || 0} مهمة فرعية</span>
                       <span>{roleLabels[board.role] || roleLabels.member}</span>
                     </div>
                     {editingBoardId === board.id ? (
@@ -205,12 +206,28 @@ function WorkspaceOverviewPage({
                     <p>افتح لوحة الكانبان، أدِر الأعمدة والبطاقات، وتعاون لحظيا مع الفريق.</p>
                   </div>
                   <div className="hub-board-progress">
-                    <div><span>الإنجاز العام للمرحلة</span><strong>{workspaceStats.velocity}%</strong></div>
-                    <div><span style={{ width: `${Math.min(100, workspaceStats.velocity)}%` }} /></div>
+                    <div>
+                      <span>إنجاز المشروع</span>
+                      <strong>{board.stats?.progress || 0}%</strong>
+                    </div>
+                    <div><span style={{ width: `${Math.min(100, board.stats?.progress || 0)}%` }} /></div>
+                    <small>
+                      {board.stats?.cardsCompleted || 0}/{board.stats?.cardsTotal || 0} بطاقة مكتملة،{' '}
+                      {board.stats?.subtasksCompleted || 0}/{board.stats?.subtasksTotal || 0} مهمة منجزة
+                    </small>
                   </div>
                   <div className="hub-board-footer">
-                    <span>{index + 1 < 10 ? `0${index + 1}` : index + 1}</span>
-                    <div className="hub-mini-avatars" aria-hidden="true"><span>س</span><span>ع</span><span>+</span></div>
+                    <span title="آخر تحديث">
+                      {board.updatedAt ? new Date(board.updatedAt).toLocaleDateString('ar') : '—'}
+                    </span>
+                    <div className="hub-mini-avatars" aria-label={`${board.stats?.memberCount || 0} أعضاء`}>
+                      {(board.stats?.memberPreview || []).map((member) => (
+                        <span key={member.id} title={member.name}>{member.name.slice(0, 1)}</span>
+                      ))}
+                      {(board.stats?.memberCount || 0) > 3 ? (
+                        <span title="أعضاء إضافيون">+{board.stats.memberCount - 3}</span>
+                      ) : null}
+                    </div>
                     <div className="hub-board-actions">
                       {board.role === 'owner' ? (
                         <>
