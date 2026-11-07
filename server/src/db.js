@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dataDir = join(__dirname, '..', 'data');
-const dbPath = join(dataDir, 'collab-tool.sqlite');
+const dbPath = process.env.COLLAB_DB_PATH || join(dataDir, 'collab-tool.sqlite');
 
 mkdirSync(dataDir, { recursive: true });
 

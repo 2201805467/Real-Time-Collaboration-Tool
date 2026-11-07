@@ -1,16 +1,16 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { matchPath, useLocation, useNavigate } from 'react-router-dom';
-import { io } from 'socket.io-client';
 import WorkspaceChrome from './components/WorkspaceChrome.jsx';
 import TeamPage from './pages/TeamPage.jsx';
 import WorkspaceOverviewPage from './pages/WorkspaceOverviewPage.jsx';
 import KanbanPage from './pages/KanbanPage.jsx';
 import TaskDetailsPage from './pages/TaskDetailsPage.jsx';
-import { socketUrl } from './api/client.js';
 import { boardApi } from './api/boardApi.js';
 import { acceptInvite, createBoard, getInvite } from './api/workspaceApi.js';
 import useAuthSession from './hooks/useAuthSession.js';
+import useActiveBoard from './hooks/useActiveBoard.js';
+import useBoardSocket from './hooks/useBoardSocket.js';
 import useWorkspaceData from './hooks/useWorkspaceData.js';
 
 const priorityLabels = {
@@ -54,11 +54,6 @@ function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const workspaceRoute = useMemo(() => getWorkspaceRoute(location.pathname), [location.pathname]);
-  const socketRef = useRef(null);
-  const selectedBoardIdRef = useRef('');
-  const selectedCardIdRef = useRef('');
-  const userRef = useRef(null);
-  const [isConnected, setIsConnected] = useState(false);
   const [authMode, setAuthMode] = useState('login');
   const [authForm, setAuthForm] = useState({ name: '', email: '', password: '' });
   const {
@@ -91,13 +86,29 @@ function App() {
   const [inviteNotice, setInviteNotice] = useState('');
   const [isCreatingInvite, setIsCreatingInvite] = useState(false);
   const [isAcceptingInvite, setIsAcceptingInvite] = useState(false);
-  const [selectedBoardId, setSelectedBoardId] = useState('');
-  const [activeBoard, setActiveBoard] = useState(null);
-  const [columns, setColumns] = useState([]);
+  const {
+    selectedBoardId,
+    setSelectedBoardId,
+    activeBoard,
+    setActiveBoard,
+    columns,
+    setColumns,
+    boardMembers,
+    setBoardMembers,
+    selectedCardId,
+    setSelectedCardId,
+    selectedCard,
+    setSelectedCard,
+    comments,
+    setComments,
+    moveCardInState,
+    mergeCardInState,
+    removeCardFromState,
+    resetActiveBoard
+  } = useActiveBoard();
   const [editingBoardTitle, setEditingBoardTitle] = useState('');
   const [newColumnTitle, setNewColumnTitle] = useState('');
   const [columnDrafts, setColumnDrafts] = useState({});
-  const [presenceUsers, setPresenceUsers] = useState([]);
   const [boardError, setBoardError] = useState('');
   const [isLoadingBoard, setIsLoadingBoard] = useState(false);
   const [isSavingBoard, setIsSavingBoard] = useState(false);
@@ -109,7 +120,6 @@ function App() {
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [tagFilter, setTagFilter] = useState('all');
   const [assigneeFilter, setAssigneeFilter] = useState('all');
-  const [boardMembers, setBoardMembers] = useState([]);
   const [removingMemberId, setRemovingMemberId] = useState('');
   const [updatingMemberRoleId, setUpdatingMemberRoleId] = useState('');
   const [teamSearchQuery, setTeamSearchQuery] = useState('');
@@ -118,8 +128,6 @@ function App() {
   const [cardTitles, setCardTitles] = useState({});
   const [isCreatingCard, setIsCreatingCard] = useState('');
   const [isDeletingCard, setIsDeletingCard] = useState(false);
-  const [selectedCardId, setSelectedCardId] = useState('');
-  const [selectedCard, setSelectedCard] = useState(null);
   const [cardDetailsForm, setCardDetailsForm] = useState({
     title: '',
     description: '',
@@ -130,7 +138,6 @@ function App() {
     tagDraft: '',
     checklist: []
   });
-  const [comments, setComments] = useState([]);
   const [commentBody, setCommentBody] = useState('');
   const [cardDetailsError, setCardDetailsError] = useState('');
   const [isLoadingCardDetails, setIsLoadingCardDetails] = useState(false);
@@ -177,36 +184,13 @@ function App() {
       .catch((error) => setInviteError(error.message));
   }, [inviteToken]);
 
-  useEffect(() => {
-    if (!token) {
-      setIsConnected(false);
-      return undefined;
-    }
-
-    const socket = io(socketUrl, {
-      auth: { token }
-    });
-    socketRef.current = socket;
-
-    function handleConnect() {
-      setIsConnected(true);
-    }
-
-    function handleDisconnect() {
-      setIsConnected(false);
-    }
-
-    function handleConnectError(error) {
-      setIsConnected(false);
-
-      if (error.message === 'Unauthorized') {
+  function handleUnauthorizedSocket() {
         expireSession('انتهت الجلسة أو أنها غير صالحة. سجل الدخول من جديد.');
         resetWorkspace();
         closeBoard(false);
-      }
-    }
+  }
 
-    function handleCardCreated(payload) {
+  function handleCardCreated(payload) {
       setColumns((currentColumns) =>
         currentColumns.map((column) => {
           if (column.id !== payload.columnId) {
@@ -240,7 +224,7 @@ function App() {
     function handleBoardDeleted(payload) {
       setBoards((currentBoards) => currentBoards.filter((board) => board.id !== payload.boardId));
 
-      if (selectedBoardIdRef.current === payload.boardId) {
+      if (selectedBoardId === payload.boardId) {
         closeBoard();
       }
     }
@@ -292,7 +276,7 @@ function App() {
     function handleCardUpdated(payload) {
       mergeCardInState(payload.card);
 
-      if (selectedCardIdRef.current === payload.card.id) {
+      if (selectedCardId === payload.card.id) {
         setSelectedCard(payload.card);
         setCardDetailsForm({
           title: payload.card.title,
@@ -310,7 +294,7 @@ function App() {
     function handleCommentCreated(payload) {
       setComments((currentComments) => {
         if (
-          selectedCardIdRef.current !== payload.cardId ||
+          selectedCardId !== payload.cardId ||
           currentComments.some((comment) => comment.id === payload.comment.id)
         ) {
           return currentComments;
@@ -323,7 +307,7 @@ function App() {
     function handleCardDeleted(payload) {
       removeCardFromState(payload.cardId);
 
-      if (selectedCardIdRef.current === payload.cardId) {
+      if (selectedCardId === payload.cardId) {
         closeCard();
       }
     }
@@ -372,7 +356,7 @@ function App() {
         )
       }));
 
-      if (userRef.current?.id === payload.memberId) {
+      if (user?.id === payload.memberId) {
         closeBoard();
       }
     }
@@ -401,149 +385,39 @@ function App() {
       }
     }
 
-    function handlePresence(payload) {
-      setPresenceUsers(payload.users || []);
-    }
-
     function handleAccessRevoked(payload) {
       setBoards((currentBoards) => currentBoards.filter((board) => board.id !== payload.boardId));
       closeBoard();
       setBoardsError('تمت إزالة عضويتك من هذه اللوحة.');
     }
 
-    socket.on('connect', handleConnect);
-    socket.on('disconnect', handleDisconnect);
-    socket.on('connect_error', handleConnectError);
-    socket.on('board:updated', handleBoardUpdated);
-    socket.on('board:deleted', handleBoardDeleted);
-    socket.on('board:column-created', handleColumnCreated);
-    socket.on('board:column-updated', handleColumnUpdated);
-    socket.on('board:column-deleted', handleColumnDeleted);
-    socket.on('board:card-created', handleCardCreated);
-    socket.on('board:card-moved', handleCardMoved);
-    socket.on('board:card-updated', handleCardUpdated);
-    socket.on('board:card-deleted', handleCardDeleted);
-    socket.on('board:member-removed', handleMemberRemoved);
-    socket.on('board:member-updated', handleMemberUpdated);
-    socket.on('board:comment-created', handleCommentCreated);
-    socket.on('board:presence', handlePresence);
-    socket.on('board:access-revoked', handleAccessRevoked);
-
-    return () => {
-      socket.off('connect', handleConnect);
-      socket.off('disconnect', handleDisconnect);
-      socket.off('connect_error', handleConnectError);
-      socket.off('board:updated', handleBoardUpdated);
-      socket.off('board:deleted', handleBoardDeleted);
-      socket.off('board:column-created', handleColumnCreated);
-      socket.off('board:column-updated', handleColumnUpdated);
-      socket.off('board:column-deleted', handleColumnDeleted);
-      socket.off('board:card-created', handleCardCreated);
-      socket.off('board:card-moved', handleCardMoved);
-      socket.off('board:card-updated', handleCardUpdated);
-      socket.off('board:card-deleted', handleCardDeleted);
-      socket.off('board:member-removed', handleMemberRemoved);
-      socket.off('board:member-updated', handleMemberUpdated);
-      socket.off('board:comment-created', handleCommentCreated);
-      socket.off('board:presence', handlePresence);
-      socket.off('board:access-revoked', handleAccessRevoked);
-      socket.disconnect();
-      socketRef.current = null;
-    };
-  }, [token]);
-
-  useEffect(() => {
-    const socket = socketRef.current;
-
-    if (!selectedBoardId || !socket || !user || !isConnected) {
-      return undefined;
-    }
-
-    socket.emit('board:join', { boardId: selectedBoardId }, (result) => {
-      if (!result?.ok) {
-        setBoardError(result?.message || 'تعذر الانضمام إلى التحديثات الفورية لهذه اللوحة.');
-      }
-    });
-
-    return () => {
-      if (socket.connected) {
-        socket.emit('board:leave', selectedBoardId);
-      }
-      setPresenceUsers([]);
-    };
-  }, [selectedBoardId, user, isConnected]);
-
-  useEffect(() => {
-    selectedBoardIdRef.current = selectedBoardId;
-  }, [selectedBoardId]);
-
-  useEffect(() => {
-    selectedCardIdRef.current = selectedCardId;
-  }, [selectedCardId]);
-
-  useEffect(() => {
-    userRef.current = user;
-  }, [user]);
+  const { isConnected, presenceUsers, setPresenceUsers } = useBoardSocket({
+    token,
+    user,
+    boardId: selectedBoardId,
+    handlers: {
+      'board:updated': handleBoardUpdated,
+      'board:deleted': handleBoardDeleted,
+      'board:column-created': handleColumnCreated,
+      'board:column-updated': handleColumnUpdated,
+      'board:column-deleted': handleColumnDeleted,
+      'board:card-created': handleCardCreated,
+      'board:card-moved': handleCardMoved,
+      'board:card-updated': handleCardUpdated,
+      'board:card-deleted': handleCardDeleted,
+      'board:member-removed': handleMemberRemoved,
+      'board:member-updated': handleMemberUpdated,
+      'board:comment-created': handleCommentCreated,
+      'board:access-revoked': handleAccessRevoked
+    },
+    onUnauthorized: handleUnauthorizedSocket,
+    onJoinError: (message) => setBoardError(
+      message || 'تعذر الانضمام إلى التحديثات الفورية لهذه اللوحة.'
+    )
+  });
 
   function updateAuthForm(field, value) {
     setAuthForm((currentForm) => ({ ...currentForm, [field]: value }));
-  }
-
-  function moveCardInState(cardId, targetColumnId, targetPosition, updatedCard) {
-    setColumns((currentColumns) => {
-      let movedCard = updatedCard || null;
-      const columnsWithoutCard = currentColumns.map((column) => {
-        const remainingCards = column.cards.filter((card) => {
-          if (card.id === cardId) {
-            movedCard = updatedCard || { ...card, columnId: targetColumnId };
-            return false;
-          }
-
-          return true;
-        });
-
-        return { ...column, cards: remainingCards };
-      });
-
-      if (!movedCard) {
-        return currentColumns;
-      }
-
-      return columnsWithoutCard.map((column) => {
-        if (column.id !== targetColumnId) {
-          return column;
-        }
-
-        const nextCards = [...column.cards];
-        const insertAt = Math.max(0, Math.min(targetPosition, nextCards.length));
-        nextCards.splice(insertAt, 0, { ...movedCard, columnId: targetColumnId });
-
-        return {
-          ...column,
-          cards: nextCards.map((card, index) => ({ ...card, position: index }))
-        };
-      });
-    });
-  }
-
-  function mergeCardInState(updatedCard) {
-    setColumns((currentColumns) =>
-      currentColumns.map((column) => ({
-        ...column,
-        cards: column.cards.map((card) => (card.id === updatedCard.id ? { ...card, ...updatedCard } : card))
-      }))
-    );
-  }
-
-  function removeCardFromState(cardId) {
-    setColumns((currentColumns) =>
-      currentColumns.map((column) => ({
-        ...column,
-        cards: column.cards
-          .filter((card) => card.id !== cardId)
-          .map((card, index) => ({ ...card, position: index }))
-      }))
-    );
   }
 
   async function loadBoardMembers(boardId) {
@@ -675,9 +549,7 @@ function App() {
   }
 
   function closeBoard(updateRoute = true) {
-    setSelectedBoardId('');
-    setActiveBoard(null);
-    setColumns([]);
+    resetActiveBoard();
     setEditingBoardTitle('');
     setNewColumnTitle('');
     setColumnDrafts({});
@@ -685,7 +557,6 @@ function App() {
     setPriorityFilter('all');
     setTagFilter('all');
     setAssigneeFilter('all');
-    setBoardMembers([]);
     setActiveSidebarSection('overview');
     setPresenceUsers([]);
     setCardTitles({});
