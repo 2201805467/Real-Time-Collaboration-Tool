@@ -1,41 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
-import { CSS } from '@dnd-kit/utilities';
+import { PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { matchPath, useLocation, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
-import {
-  Calendar,
-  Check,
-  CircleCheck,
-  ClipboardCheck,
-  FolderOpen,
-  Flag,
-  FolderKanban,
-  Gauge,
-  Grid2X2,
-  KanbanSquare,
-  LifeBuoy,
-  Link,
-  ListChecks,
-  LogOut,
-  MessageSquare,
-  Moon,
-  MoreHorizontal,
-  MoreVertical,
-  Plus,
-  Radar,
-  Save,
-  Search,
-  Settings,
-  Share2,
-  ShieldCheck,
-  SlidersHorizontal,
-  Tags,
-  Trash2,
-  UserRound,
-  UsersRound,
-  Wifi,
-  Zap
-} from 'lucide-react';
+import WorkspaceChrome from './components/WorkspaceChrome.jsx';
+import TeamPage from './pages/TeamPage.jsx';
+import WorkspaceOverviewPage from './pages/WorkspaceOverviewPage.jsx';
+import KanbanPage from './pages/KanbanPage.jsx';
+import TaskDetailsPage from './pages/TaskDetailsPage.jsx';
 
 const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:4000';
 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -55,20 +26,6 @@ async function readJsonResponse(response) {
   return response.json();
 }
 
-const priorityStyles = {
-  urgent: 'bg-error-container text-on-error-container',
-  medium: 'bg-tertiary-fixed text-on-tertiary-fixed-variant',
-  normal: 'bg-surface-container text-on-surface-variant'
-};
-
-const columnDotStyles = ['bg-outline', 'bg-primary-container animate-pulse', 'bg-tertiary-container', 'bg-secondary'];
-const tagStyles = [
-  'bg-primary-fixed text-on-primary-fixed-variant',
-  'bg-secondary-container text-on-secondary-container',
-  'bg-surface-container-highest text-on-surface',
-  'bg-tertiary-fixed text-on-tertiary-fixed-variant'
-];
-
 const emptyWorkspaceStats = {
   boards: { total: 0, owned: 0, shared: 0 },
   cards: { total: 0, completed: 0, completedThisWeek: 0 },
@@ -76,14 +33,6 @@ const emptyWorkspaceStats = {
   velocity: 0,
   storage: { usedPercent: 0, usedLabel: '0 GB', limitLabel: '20 GB' }
 };
-
-function getChecklistProgress(card) {
-  if (!card.checklistTotal) {
-    return 0;
-  }
-
-  return Math.round((card.completedChecklistItems / card.checklistTotal) * 100);
-}
 
 const priorityLabels = {
   urgent: 'عاجل',
@@ -97,131 +46,37 @@ const roleLabels = {
   member: 'عضو'
 };
 
-function DroppableColumn({ column, index, children }) {
-  const { isOver, setNodeRef } = useDroppable({ id: column.id });
+function getWorkspaceRoute(pathname) {
+  const taskRoute = matchPath('/boards/:boardId/tasks/:cardId', pathname);
 
-  return (
-    <section
-      ref={setNodeRef}
-      className={`kanban-column flex flex-col rounded-2xl bg-surface-container-low/80 p-space-md shadow-stitch transition-all ${
-        isOver ? 'over ring-2 ring-primary-container bg-primary-fixed' : ''
-      }`}
-      data-column-tone={index % columnDotStyles.length}
-    >
-      {children}
-    </section>
-  );
-}
+  if (taskRoute) {
+    return {
+      boardId: taskRoute.params.boardId,
+      cardId: taskRoute.params.cardId,
+      section: 'task'
+    };
+  }
 
-function DraggableCard({ card, onOpen, canMove }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: card.id,
-    disabled: !canMove
-  });
-  const style = {
-    transform: CSS.Translate.toString(transform)
-  };
-  const progress = getChecklistProgress(card);
+  const boardRoute = matchPath('/boards/:boardId/:section', pathname);
 
-  return (
-    <article
-      ref={setNodeRef}
-      className={`task-card group rounded-xl bg-surface-container-lowest p-space-md shadow-stitch transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card ${
-        canMove ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
-      } ${isDragging ? 'dragging opacity-75 shadow-card' : ''}`}
-      style={style}
-      onClick={() => onOpen(card.id)}
-      {...(canMove ? listeners : {})}
-      {...attributes}
-    >
-      <div className="flex items-start justify-between gap-space-sm">
-        {card.tags?.[0] ? (
-          <span className={`max-w-[62%] truncate rounded-full px-2 py-0.5 text-label-sm font-semibold ${tagStyles[0]}`}>
-            {card.tags[0]}
-          </span>
-        ) : (
-          <span className="rounded-full bg-surface-container px-2 py-0.5 text-label-sm font-semibold text-on-surface-variant">
-            General
-          </span>
-        )}
-        <span
-          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-label-sm font-semibold ${
-            priorityStyles[card.priority] || priorityStyles.normal
-          }`}
-        >
-          <span className="h-1.5 w-1.5 rounded-full bg-current" />
-          {priorityLabels[card.priority] || priorityLabels.normal}
-        </span>
-      </div>
+  if (boardRoute && ['kanban', 'team', 'tasks'].includes(boardRoute.params.section)) {
+    return {
+      boardId: boardRoute.params.boardId,
+      cardId: '',
+      section: boardRoute.params.section === 'tasks' ? 'task' : boardRoute.params.section
+    };
+  }
 
-      <h4 className="text-headline-sm font-semibold leading-6 text-on-surface transition-colors group-hover:text-primary">
-        {card.title}
-      </h4>
-
-      {card.description ? <p className="line-clamp-2 text-body-sm leading-5 text-on-surface-variant">{card.description}</p> : null}
-
-      {card.checklistTotal ? (
-        <div className="grid gap-1 rounded-lg bg-surface-container-low p-2">
-          <div className="flex items-center justify-between text-label-sm text-on-surface-variant">
-            <span className="inline-flex items-center gap-1">
-              <ListChecks size={15} aria-hidden="true" />
-              <span>Checklist</span>
-            </span>
-            <span className="font-code font-semibold text-on-surface">
-              {card.completedChecklistItems}/{card.checklistTotal}
-            </span>
-          </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-surface-container-high">
-            <span className="block h-full rounded-full bg-primary-container" style={{ width: `${progress}%` }} />
-          </div>
-        </div>
-      ) : null}
-
-      {card.tags?.length > 1 ? (
-        <div className="flex flex-wrap gap-1.5">
-          {card.tags.slice(1, 4).map((tag, index) => (
-            <span key={tag} className={`rounded-full px-2 py-0.5 text-label-sm font-semibold ${tagStyles[(index + 1) % tagStyles.length]}`}>
-              {tag}
-            </span>
-          ))}
-        </div>
-      ) : null}
-
-      <div className="flex items-center justify-between gap-space-sm pt-space-xs">
-        {card.assigneeName ? (
-          <span
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-tertiary-container text-[10px] font-semibold text-on-tertiary ring-2 ring-surface-container-lowest"
-            title={card.assigneeName}
-          >
-            {card.assigneeName.slice(0, 2)}
-          </span>
-        ) : (
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-container-highest text-[10px] font-semibold text-on-surface-variant ring-2 ring-surface-container-lowest">
-            --
-          </span>
-        )}
-        <div className="flex items-center gap-3 text-label-sm text-on-surface-variant">
-          {card.checklistTotal ? (
-            <span className="inline-flex items-center gap-1">
-              <CircleCheck size={15} aria-hidden="true" />
-              <span>{progress}%</span>
-            </span>
-          ) : null}
-          {card.dueDate ? (
-            <span className="inline-flex items-center gap-1">
-              <Calendar size={15} aria-hidden="true" />
-              <span>{card.dueDate}</span>
-            </span>
-          ) : null}
-        </div>
-      </div>
-    </article>
-  );
+  return { boardId: '', cardId: '', section: 'overview' };
 }
 
 function App() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const location = useLocation();
+  const navigate = useNavigate();
+  const workspaceRoute = useMemo(() => getWorkspaceRoute(location.pathname), [location.pathname]);
   const socketRef = useRef(null);
+  const selectedBoardIdRef = useRef('');
   const selectedCardIdRef = useRef('');
   const userRef = useRef(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -326,33 +181,31 @@ function App() {
 
   useEffect(() => {
     if (!user) {
-      return undefined;
+      return;
     }
 
-    function syncBoardFromHash() {
-      const hash = window.location.hash;
-      if (hash && !hash.startsWith('#board=')) {
-        return;
-      }
-
-      const boardIdFromHash = hash.startsWith('#board=')
-        ? decodeURIComponent(hash.replace('#board=', ''))
-        : '';
-
-      if (boardIdFromHash && boardIdFromHash !== selectedBoardId) {
-        openBoard(boardIdFromHash, false);
-      }
-
-      if (!boardIdFromHash && selectedBoardId) {
+    if (!workspaceRoute.boardId) {
+      if (selectedBoardId) {
         closeBoard(false);
       }
+      return;
     }
 
-    syncBoardFromHash();
-    window.addEventListener('hashchange', syncBoardFromHash);
+    if (workspaceRoute.boardId !== selectedBoardId) {
+      openBoard(workspaceRoute.boardId, false, workspaceRoute.section);
+      return;
+    }
 
-    return () => window.removeEventListener('hashchange', syncBoardFromHash);
-  }, [user, selectedBoardId]);
+    setActiveSidebarSection(workspaceRoute.section);
+
+    if (
+      workspaceRoute.section === 'task' &&
+      workspaceRoute.cardId &&
+      workspaceRoute.cardId !== selectedCardId
+    ) {
+      openCard(workspaceRoute.cardId, false);
+    }
+  }, [user, workspaceRoute, selectedBoardId, selectedCardId]);
 
   useEffect(() => {
     if (!inviteToken) {
@@ -440,14 +293,10 @@ function App() {
 
     function handleBoardDeleted(payload) {
       setBoards((currentBoards) => currentBoards.filter((board) => board.id !== payload.boardId));
-      setSelectedBoardId((currentBoardId) => {
-        if (currentBoardId !== payload.boardId) {
-          return currentBoardId;
-        }
 
-        closeBoard(false);
-        return '';
-      });
+      if (selectedBoardIdRef.current === payload.boardId) {
+        closeBoard();
+      }
     }
 
     function handleColumnCreated(payload) {
@@ -677,6 +526,10 @@ function App() {
       setPresenceUsers([]);
     };
   }, [selectedBoardId, user, isConnected]);
+
+  useEffect(() => {
+    selectedBoardIdRef.current = selectedBoardId;
+  }, [selectedBoardId]);
 
   useEffect(() => {
     selectedCardIdRef.current = selectedCardId;
@@ -916,9 +769,9 @@ function App() {
     }
   }
 
-  async function openBoard(boardId, updateHash = true) {
-    if (updateHash) {
-      window.location.hash = `board=${encodeURIComponent(boardId)}`;
+  async function openBoard(boardId, updateRoute = true, section = 'kanban') {
+    if (updateRoute) {
+      navigate(`/boards/${encodeURIComponent(boardId)}/${section === 'task' ? 'tasks' : section}`);
     }
 
     setSelectedBoardId(boardId);
@@ -953,7 +806,7 @@ function App() {
       setPriorityFilter('all');
       setTagFilter('all');
       setAssigneeFilter('all');
-      setActiveSidebarSection('kanban');
+      setActiveSidebarSection(section);
     } catch (error) {
       setBoardError(error.message);
     } finally {
@@ -961,7 +814,7 @@ function App() {
     }
   }
 
-  function closeBoard(updateHash = true) {
+  function closeBoard(updateRoute = true) {
     setSelectedBoardId('');
     setActiveBoard(null);
     setColumns([]);
@@ -976,11 +829,31 @@ function App() {
     setActiveSidebarSection('overview');
     setPresenceUsers([]);
     setCardTitles({});
-    closeCard();
+    closeCard(false);
 
-    if (updateHash && window.location.hash.startsWith('#board=')) {
-      window.history.pushState('', document.title, window.location.pathname + window.location.search);
+    if (updateRoute) {
+      navigate('/');
     }
+  }
+
+  function navigateToSection(section) {
+    if (section === 'overview') {
+      closeBoard();
+      return;
+    }
+
+    if (!selectedBoardId) {
+      return;
+    }
+
+    if (section === 'share') {
+      handleCreateInvite();
+      return;
+    }
+
+    const pathSection = section === 'task' ? 'tasks' : section;
+    const cardSuffix = section === 'task' && selectedCardId ? `/${encodeURIComponent(selectedCardId)}` : '';
+    navigate(`/boards/${encodeURIComponent(selectedBoardId)}/${pathSection}${cardSuffix}`);
   }
 
   async function handleAuthSubmit(event) {
@@ -1403,7 +1276,11 @@ function App() {
     }
   }
 
-  async function openCard(cardId) {
+  async function openCard(cardId, updateRoute = true) {
+    if (updateRoute) {
+      navigate(`/boards/${encodeURIComponent(selectedBoardId)}/tasks/${encodeURIComponent(cardId)}`);
+    }
+
     setSelectedCardId(cardId);
     setSelectedCard(null);
     setComments([]);
@@ -1440,13 +1317,17 @@ function App() {
     }
   }
 
-  function closeCard() {
+  function closeCard(updateRoute = true) {
     setSelectedCardId('');
     setSelectedCard(null);
     setComments([]);
     setCommentBody('');
     setCardDetailsError('');
     setActiveSidebarSection(selectedBoardId ? 'kanban' : 'overview');
+
+    if (updateRoute && selectedBoardId) {
+      navigate(`/boards/${encodeURIComponent(selectedBoardId)}/kanban`);
+    }
   }
 
   function addChecklistItem() {
@@ -1676,150 +1557,19 @@ function App() {
   return (
     <main className={user ? 'workspace-shell' : 'app-shell'}>
       {user ? (
-        <>
-          <aside className="workspace-sidebar" aria-label="Workspace navigation">
-            <div className="brand-block">
-              <div className="brand-mark secondary">ت</div>
-              <div>
-                <strong>تدفق</strong>
-                <span>Tadafuq Cloud</span>
-              </div>
-            </div>
-
-            <div className="workspace-switcher">
-              <button type="button" className="switcher-arrows" aria-label="تبديل المشروع">
-                ↕
-              </button>
-              <label>
-                المشروع
-                <select
-                  value={selectedBoardId || ''}
-                  onChange={(event) => {
-                    if (event.target.value) {
-                      openBoard(event.target.value);
-                    } else {
-                      closeBoard();
-                    }
-                  }}
-                >
-                  <option value="">نظرة عامة على المشاريع</option>
-                  {boards.map((board) => (
-                    <option key={board.id} value={board.id}>
-                      {board.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="brand-mark">ت</div>
-            </div>
-
-            <nav className="side-nav" aria-label="Main navigation">
-              <span className="nav-section-title">أقسام المشروع</span>
-              <button type="button" className={activeSidebarSection === 'overview' ? 'active' : ''} onClick={() => closeBoard()}>
-                <FolderKanban className="nav-icon" size={20} aria-hidden="true" />
-                نظرة عامة والمشاريع
-              </button>
-              <button
-                type="button"
-                className={activeSidebarSection === 'kanban' ? 'active' : ''}
-                onClick={() => {
-                  setActiveSidebarSection('kanban');
-                }}
-                disabled={!selectedBoardId}
-              >
-                <KanbanSquare className="nav-icon" size={20} aria-hidden="true" />
-                لوحة الكانبان
-              </button>
-              <button
-                type="button"
-                className={activeSidebarSection === 'team' ? 'active' : ''}
-                onClick={() => {
-                  setActiveSidebarSection('team');
-                }}
-                disabled={!selectedBoardId}
-              >
-                <UsersRound className="nav-icon" size={20} aria-hidden="true" />
-                إدارة الفريق والصلاحيات
-                {boardMembers.length ? <span className="nav-badge">{boardMembers.length}</span> : null}
-              </button>
-              <button
-                type="button"
-                className={activeSidebarSection === 'task' ? 'active' : ''}
-                onClick={() => {
-                  setActiveSidebarSection('task');
-                }}
-                disabled={!selectedBoardId}
-              >
-                <ClipboardCheck className="nav-icon" size={20} aria-hidden="true" />
-                تفاصيل المهمة والنشاط
-              </button>
-            </nav>
-
-            <div className="sidebar-footer">
-              <div className="storage-card">
-                <div>
-                  <span>المساحة السحابية</span>
-                  <strong>{workspaceStats.storage.usedPercent}%</strong>
-                </div>
-                <div className="storage-track">
-                  <span style={{ width: `${workspaceStats.storage.usedPercent}%` }} />
-                </div>
-                <small>{workspaceStats.storage.usedLabel} / {workspaceStats.storage.limitLabel}</small>
-              </div>
-              <button type="button">
-                <Settings className="nav-icon" size={20} aria-hidden="true" />
-                الإعدادات العامة
-              </button>
-              <button type="button">
-                <LifeBuoy className="nav-icon" size={20} aria-hidden="true" />
-                الدعم الفني والتوثيق
-              </button>
-              <button type="button" className="dark-toggle">
-                <Moon className="nav-icon" size={20} aria-hidden="true" />
-                الوضع المظلم
-                <span className="toggle-track"><span /></span>
-              </button>
-              <div className="socket-status">
-                <span>Socket.io</span>
-                <strong>{isConnected ? 'متصل الآن' : 'غير متصل'}</strong>
-              </div>
-            </div>
-          </aside>
-
-          <header className="workspace-topbar">
-            <div>
-              <span>المشاريع البرمجية</span>
-              <strong>{activeBoardTitle}</strong>
-            </div>
-            <div className="topbar-actions">
-              <span className={isConnected ? 'live-pill online' : 'live-pill'}>مزامنة فورية</span>
-              <div className="topbar-presence" title="الأعضاء المتصلون">
-                <div className="topbar-avatars">
-                  {presenceUsers.slice(0, 3).map((presenceUser) => (
-                    <span key={presenceUser.socketId}>{presenceUser.name.slice(0, 1)}</span>
-                  ))}
-                  {presenceUsers.length > 3 ? <span>+{presenceUsers.length - 3}</span> : null}
-                </div>
-                <span className="online-caption">متصل الآن</span>
-              </div>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => setActiveSidebarSection('kanban')}
-              >
-                تصفية
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={handleCreateInvite}
-                disabled={!selectedBoardId || !userIsBoardOwner}
-              >
-                مشاركة
-              </button>
-            </div>
-          </header>
-        </>
+        <WorkspaceChrome
+          boards={boards}
+          selectedBoardId={selectedBoardId}
+          activeSection={activeSidebarSection}
+          activeBoardTitle={activeBoardTitle}
+          boardMembersCount={boardMembers.length}
+          workspaceStats={workspaceStats}
+          isConnected={isConnected}
+          presenceUsers={presenceUsers}
+          userIsBoardOwner={userIsBoardOwner}
+          onBoardChange={(boardId) => (boardId ? openBoard(boardId) : closeBoard())}
+          onNavigate={navigateToSection}
+        />
       ) : null}
 
       {(!user || !selectedBoardId) ? (
@@ -1930,236 +1680,24 @@ function App() {
           ) : null}
 
           {!selectedBoardId ? (
-          <section className="dashboard-panel workspace-hub" aria-label="مركز مساحات العمل والمشاريع">
-            <div className="workspace-hub-head">
-              <div>
-                <div className="hub-kicker">
-                  <span>مساحة عمل رقمية موحدة</span>
-                  <span className="hub-code">ORG-FLOW</span>
-                </div>
-                <h2>مركز مساحات العمل والمشاريع</h2>
-                <p>إدارة وتتبع سير عمليات التطوير وتفاعل الفرق في الزمن الفعلي.</p>
-              </div>
-              <div className="hub-actions">
-                <button type="button" className="secondary-button">
-                  <SlidersHorizontal size={18} aria-hidden="true" />
-                  تخصيص المساحات
-                </button>
-                <button type="button" onClick={() => document.querySelector('.board-form input')?.focus()}>
-                  <Plus size={18} aria-hidden="true" />
-                  مشروع جديد
-                </button>
-              </div>
-            </div>
-
-            <div className="hub-metrics" aria-label="Workspace metrics">
-              <article>
-                <span><FolderOpen size={18} aria-hidden="true" /></span>
-                <p>المشاريع النشطة</p>
-                <strong>{workspaceStats.boards.total}</strong>
-                <small>{workspaceStats.boards.total === 1 ? 'لوحة واحدة متاحة' : `${workspaceStats.boards.total} لوحة متاحة`}</small>
-              </article>
-              <article>
-                <span><CircleCheck size={18} aria-hidden="true" /></span>
-                <p>المهام المنجزة هذا الأسبوع</p>
-                <strong>{workspaceStats.cards.completedThisWeek}</strong>
-                <small>{workspaceStats.cards.completed} بطاقة مكتملة من أصل {workspaceStats.cards.total}</small>
-              </article>
-              <article>
-                <span><UsersRound size={18} aria-hidden="true" /></span>
-                <p>الأعضاء المتصلون الآن</p>
-                <strong>{presenceUsers.length}</strong>
-                <small>{isConnected ? 'الاتصال اللحظي يعمل الآن.' : 'الاتصال اللحظي غير متصل حاليا.'}</small>
-              </article>
-              <article>
-                <span><Gauge size={18} aria-hidden="true" /></span>
-                <p>معدل سرعة الإنجاز</p>
-                <strong>{workspaceStats.velocity}%</strong>
-                <small>{workspaceStats.checklist.completed}/{workspaceStats.checklist.total} مهمة فرعية مكتملة</small>
-              </article>
-            </div>
-
-            <div className="hub-command-bar">
-              <div className="hub-tabs" aria-label="Workspace filters">
-                <button type="button" className="active">
-                  جميع المساحات
-                  <span>{workspaceStats.boards.total}</span>
-                </button>
-                <button type="button">
-                  أملكها
-                  <span>{workspaceStats.boards.owned}</span>
-                </button>
-                <button type="button">
-                  مشتركة
-                  <span>{workspaceStats.boards.shared}</span>
-                </button>
-              </div>
-              <div className="hub-search">
-                <Search size={18} aria-hidden="true" />
-                <input placeholder="البحث عن لوحة أو مشروع..." aria-label="Search boards" />
-                <Grid2X2 size={18} aria-hidden="true" />
-              </div>
-            </div>
-
-            <div className="hub-layout">
-              <section className="hub-projects" aria-label="Projects">
-                <div className="hub-section-title">
-                  <div>
-                    <h3>لوحات العمل النشطة</h3>
-                    <p>{isLoadingBoards ? 'جاري تحميل اللوحات...' : `${boards.length} لوحة معروضة`}</p>
-                  </div>
-                  <span><Zap size={14} aria-hidden="true" /> التحديث التلقائي نشط</span>
-                </div>
-
-                <form onSubmit={handleCreateBoard} className="board-form hub-create-card">
-                  <label>
-                    اسم المشروع
-                    <input
-                      value={boardTitle}
-                      onChange={(event) => setBoardTitle(event.target.value)}
-                      placeholder="مثلا: مشروع التخرج"
-                    />
-                  </label>
-                  <button type="submit" disabled={isCreatingBoard}>
-                    <Plus size={18} aria-hidden="true" />
-                    {isCreatingBoard ? 'جاري الإنشاء...' : 'إنشاء لوحة'}
-                  </button>
-                </form>
-
-                {boardsError ? <p className="form-error">{boardsError}</p> : null}
-
-                <div className="boards-list hub-board-grid">
-                  {isLoadingBoards ? (
-                    <p className="empty-state">جاري تحميل اللوحات...</p>
-                  ) : boards.length === 0 ? (
-                    <p className="empty-state">لا توجد لوحات مشاريع بعد. أنشئ أول لوحة لبدء التعاون.</p>
-                  ) : (
-                    boards.map((board, index) => (
-                      <article key={board.id} className="board-card hub-board-card">
-                        <span className="hub-board-accent" />
-                        <div className="hub-board-topline">
-                          <span className="hub-board-icon">{board.title.slice(0, 1).toUpperCase()}</span>
-                          <span className={`role-badge ${board.role}`}>
-                            {roleLabels[board.role] || roleLabels.member}
-                          </span>
-                        </div>
-                        <div>
-                          <div className="hub-board-tags">
-                            <span>UI System</span>
-                            <span>{roleLabels[board.role] || roleLabels.member}</span>
-                          </div>
-                          <h2>{board.title}</h2>
-                          <p>افتح لوحة الكانبان، أدِر الأعمدة والبطاقات، وتعاون لحظيا مع الفريق.</p>
-                        </div>
-                        <div className="hub-board-progress">
-                          <div>
-                            <span>الإنجاز العام للمرحلة</span>
-                            <strong>{workspaceStats.velocity}%</strong>
-                          </div>
-                          <div><span style={{ width: `${Math.min(100, workspaceStats.velocity)}%` }} /></div>
-                        </div>
-                        <div className="hub-board-footer">
-                          <span>{index + 1 < 10 ? `0${index + 1}` : index + 1}</span>
-                          <div className="hub-mini-avatars" aria-hidden="true">
-                            <span>س</span>
-                            <span>ع</span>
-                            <span>+</span>
-                          </div>
-                          <button type="button" className="small-button" onClick={() => openBoard(board.id)}>
-                            فتح المشروع
-                          </button>
-                        </div>
-                      </article>
-                    ))
-                  )}
-                </div>
-              </section>
-
-              <aside className="hub-side-panel" aria-label="Workspace activity">
-                <section className="hub-quick-actions">
-                  <div className="hub-section-title compact">
-                    <div>
-                      <h3>إجراءات فورية سريعة</h3>
-                      <p>اختصارات لإدارة مساحة العمل</p>
-                    </div>
-                    <Zap size={18} aria-hidden="true" />
-                  </div>
-                  <div className="hub-action-grid">
-                    <button type="button" onClick={() => document.querySelector('.board-form input')?.focus()}>
-                      <Plus size={18} aria-hidden="true" />
-                      <strong>مشروع جديد</strong>
-                      <span>إنشاء لوحة</span>
-                    </button>
-                    <button type="button" onClick={() => setActiveSidebarSection('team')} disabled={!selectedBoardId}>
-                      <UsersRound size={18} aria-hidden="true" />
-                      <strong>دعوة أعضاء</strong>
-                      <span>إدارة الفريق</span>
-                    </button>
-                    <button type="button">
-                      <SlidersHorizontal size={18} aria-hidden="true" />
-                      <strong>أتمتة المهام</strong>
-                      <span>Webhook</span>
-                    </button>
-                    <button type="button">
-                      <Share2 size={18} aria-hidden="true" />
-                      <strong>تقرير</strong>
-                      <span>PDF / Sprint</span>
-                    </button>
-                  </div>
-                </section>
-                <section className="hub-live-feed">
-                  <div className="hub-section-title compact">
-                    <div>
-                      <h3>نشاط الفريق الحي</h3>
-                      <p>آخر التحديثات داخل مساحة العمل</p>
-                    </div>
-                    <span className="live-pill online">مباشر</span>
-                  </div>
-                  <div className="hub-feed-list">
-                    {workspaceActivity.length === 0 ? (
-                      <p className="empty-state">لا يوجد نشاط بعد. ابدأ بإنشاء أو تحديث بطاقة.</p>
-                    ) : (
-                      workspaceActivity.slice(0, 5).map((activity) => (
-                        <article key={activity.id}>
-                          <span className="hub-feed-avatar">{(activity.actorName || 'ن').slice(0, 1)}</span>
-                          <p>
-                            <strong>{activity.actorName || 'النظام'}</strong>
-                            {' '}
-                            {activity.action === 'created' ? 'أنشأ' : activity.action === 'updated' ? 'حدّث' : activity.action === 'moved' ? 'نقل' : activity.action === 'deleted' ? 'حذف' : activity.action === 'commented' ? 'علّق على' : 'غيّر'}
-                            {' '}
-                            {activity.entityType === 'card' ? 'بطاقة' : activity.entityType === 'board' ? 'لوحة' : activity.entityType}
-                            {' '}
-                            في {activity.boardTitle}.
-                          </p>
-                        </article>
-                      ))
-                    )}
-                  </div>                </section>
-                <section className="session-bar hub-session-card">
-                  <div>
-                    <strong>{user.email}</strong>
-                    <p>الجلسة محفوظة محليا في هذا المتصفح.</p>
-                  </div>
-                  <button type="button" className="secondary-button" onClick={handleLogout}>
-                    <LogOut size={18} aria-hidden="true" />
-                    خروج
-                  </button>
-                </section>
-                <section className="hub-activity-card">
-                  <h3>آخر نشاط في مساحة العمل</h3>
-                  <p>{boards.length ? 'افتح مشروعا لعرض نشاط اللوحة والتعليقات المباشرة.' : 'أنشئ لوحة لبدء ظهور النشاط هنا.'}</p>
-                </section>
-                <section className="hub-storage-card">
-                  <div>
-                    <span>المساحة السحابية</span>
-                    <strong>78%</strong>
-                  </div>
-                  <div className="storage-track"><span style={{ width: `${workspaceStats.storage.usedPercent}%` }} /></div>
-                  <small>15.6 جيجابايت / 20 جيجابايت</small>
-                </section>
-              </aside>
-            </div>
-          </section>
+            <WorkspaceOverviewPage
+              workspaceStats={workspaceStats}
+              presenceUsers={presenceUsers}
+              isConnected={isConnected}
+              isLoadingBoards={isLoadingBoards}
+              boards={boards}
+              boardTitle={boardTitle}
+              isCreatingBoard={isCreatingBoard}
+              boardsError={boardsError}
+              roleLabels={roleLabels}
+              workspaceActivity={workspaceActivity}
+              user={user}
+              onBoardTitleChange={setBoardTitle}
+              onCreateBoard={handleCreateBoard}
+              onOpenBoard={openBoard}
+              onNavigate={navigateToSection}
+              onLogout={handleLogout}
+            />
           ) : null}
 
           {selectedBoardId ? (
@@ -2193,689 +1731,113 @@ function App() {
               {inviteNotice ? <p className="form-success">{inviteNotice}</p> : null}
 
               {activeSidebarSection === 'team' ? (
-              <section className="team-permissions-page" id="team" aria-label="إدارة الفريق والصلاحيات">
-                <div className="team-hero">
-                  <div>
-                    <span className="invite-kicker">التواجد الحي والأدوار</span>
-                    <h3>إدارة الفريق والأعضاء المتصلين</h3>
-                    <p>
-                      تحكم في أدوار أعضاء اللوحة، راقب المتصلين الآن، ووزع صلاحيات العمل بين المالك والمسؤولين والأعضاء.
-                    </p>
-                  </div>
-                  <div className="team-actions">
-                    <button type="button" className="secondary-button">
-                      <Wifi size={17} />
-                      تصدير سجل التواجد
-                    </button>
-                    <button type="button" className="secondary-button">
-                      <ShieldCheck size={17} />
-                      مصفوفة الأدوار
-                    </button>
-                    {userIsBoardOwner ? (
-                      <button type="button" onClick={handleCreateInvite} disabled={isCreatingInvite}>
-                        <UsersRound size={18} />
-                        {isCreatingInvite ? 'جاري إنشاء الدعوة...' : 'دعوة عضو جديد +'}
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-
-                {userIsBoardOwner && inviteLink ? (
-                  <div className="team-invite-link">
-                    <label>
-                      رابط الدعوة
-                      <input readOnly value={inviteLink} aria-label="رابط الدعوة" />
-                    </label>
-                    <button type="button" className="secondary-button" onClick={handleCopyInvite}>
-                      <Link size={16} />
-                      نسخ الرابط
-                    </button>
-                  </div>
-                ) : null}
-
-                <div className="team-metrics">
-                  <article className="team-metric-card">
-                    <UsersRound size={26} />
-                    <span>إجمالي الفريق</span>
-                    <strong>{boardMembers.length}</strong>
-                    <small>{roleCounts.owner} مالك، {roleCounts.manager} مسؤول، {roleCounts.member} عضو</small>
-                  </article>
-                  <article className="team-metric-card live">
-                    <Zap size={26} />
-                    <span>نشط الآن</span>
-                    <strong>{presenceUsers.length}</strong>
-                    <small>مزامنة مباشرة عبر Socket.io</small>
-                  </article>
-                  <article className="team-metric-card">
-                    <ShieldCheck size={26} />
-                    <span>المسؤولون</span>
-                    <strong>{roleCounts.manager}</strong>
-                    <small>يمكنهم إضافة مهام داخل البطاقات</small>
-                  </article>
-                  <article className="team-metric-card muted">
-                    <Moon size={26} />
-                    <span>غير متصل</span>
-                    <strong>{Math.max(boardMembers.length - presenceUsers.length, 0)}</strong>
-                    <small>تظهر حالتهم عند العودة للوحة</small>
-                  </article>
-                </div>
-
-                <section className="team-radar" aria-label="رادار الحضور المباشر">
-                  <div className="team-radar-header">
-                    <div className="team-radar-icon"><Radar size={20} /></div>
-                    <div>
-                      <h4>رادار الحضور التشاركي المباشر</h4>
-                      <p>كل عضو متصل يظهر هنا فوراً، ويتم تحديث العدد مع فتح اللوحة في أكثر من نافذة.</p>
-                    </div>
-                    <span><span className="live-dot" /> WebSocket Live</span>
-                  </div>
-                  <div className="team-radar-grid">
-                    <article>
-                      <strong>مالك اللوحة</strong>
-                      <span>{roleCounts.owner} عضو</span>
-                      <p>ينشئ البطاقات، يدير الأعضاء، ويحدد المسؤولين.</p>
-                    </article>
-                    <article>
-                      <strong>المسؤولون</strong>
-                      <span>{roleCounts.manager} عضو</span>
-                      <p>ينشئون المهام الفرعية داخل البطاقات المسندة لهم ويوكلونها للأعضاء.</p>
-                    </article>
-                    <article>
-                      <strong>الأعضاء</strong>
-                      <span>{roleCounts.member} عضو</span>
-                      <p>ينفذون المهام المسندة لهم ويحدثون حالة الإنجاز.</p>
-                    </article>
-                  </div>
-                </section>
-
-                <div className="team-toolbar">
-                  <div className="team-tabs" role="tablist" aria-label="فلترة أعضاء الفريق">
-                    <button type="button" className={teamRoleFilter === 'all' ? 'active' : ''} onClick={() => setTeamRoleFilter('all')}>
-                      الكل ({boardMembers.length})
-                    </button>
-                    <button type="button" className={teamRoleFilter === 'owner' ? 'active' : ''} onClick={() => setTeamRoleFilter('owner')}>
-                      المالك ({roleCounts.owner})
-                    </button>
-                    <button type="button" className={teamRoleFilter === 'manager' ? 'active' : ''} onClick={() => setTeamRoleFilter('manager')}>
-                      المسؤولون ({roleCounts.manager})
-                    </button>
-                    <button type="button" className={teamRoleFilter === 'member' ? 'active' : ''} onClick={() => setTeamRoleFilter('member')}>
-                      الأعضاء ({roleCounts.member})
-                    </button>
-                  </div>
-                  <label className="team-search">
-                    <Search size={18} />
-                    <input
-                      value={teamSearchQuery}
-                      onChange={(event) => setTeamSearchQuery(event.target.value)}
-                      placeholder="بحث بالاسم، البريد، أو الدور..."
-                    />
-                  </label>
-                </div>
-
-                <div className="team-table">
-                  <div className="team-table-head">
-                    <span>العضو والمعلومات</span>
-                    <span>الحالة اللحظية</span>
-                    <span>الدور والصلاحيات</span>
-                    <span>اللوحة الحالية</span>
-                    <span>إجراءات</span>
-                  </div>
-                  {filteredBoardMembers.length === 0 ? (
-                    <p className="team-empty">لا توجد نتائج مطابقة للبحث الحالي.</p>
-                  ) : (
-                    filteredBoardMembers.map((member) => {
-                      const isOnline = onlineMemberIds.has(member.id) || onlineMemberEmails.has(member.email);
-
-                      return (
-                        <article key={member.id} className="team-row">
-                          <div className="team-member-profile">
-                            <span className="member-avatar">{member.name.slice(0, 2)}</span>
-                            <div>
-                              <strong>{member.name}</strong>
-                              <small>{member.email}</small>
-                            </div>
-                          </div>
-                          <span className={isOnline ? 'member-status online' : 'member-status'}>
-                            <span className="live-dot" />
-                            {isOnline ? 'متصل الآن ويعمل على اللوحة' : 'غير متصل حالياً'}
-                          </span>
-                          <div className="team-role-control">
-                            <span className={`role-badge ${member.role}`}>
-                              {roleLabels[member.role] || roleLabels.member}
-                            </span>
-                            {userIsBoardOwner && member.role !== 'owner' ? (
-                              <select
-                                className="role-select"
-                                value={member.role}
-                                onChange={(event) => handleUpdateMemberRole(member.id, event.target.value)}
-                                disabled={updatingMemberRoleId === member.id}
-                                aria-label="تغيير دور العضو"
-                              >
-                                <option value="member">عضو</option>
-                                <option value="manager">مسؤول</option>
-                              </select>
-                            ) : null}
-                          </div>
-                          <div className="team-current-board">
-                            <KanbanSquare size={16} />
-                            <span>{activeBoardTitle}</span>
-                            <small>{isOnline ? 'نشط في هذه اللحظة' : 'آخر ظهور غير متاح'}</small>
-                          </div>
-                          <div className="team-row-actions">
-                            <button type="button" className="icon-button" aria-label="تنبيه العضو">
-                              <MessageSquare size={16} />
-                            </button>
-                            {userIsBoardOwner && member.role !== 'owner' ? (
-                              <button
-                                type="button"
-                                className="danger-button small-button"
-                                onClick={() => handleRemoveMember(member.id)}
-                                disabled={removingMemberId === member.id}
-                              >
-                                {removingMemberId === member.id ? '...' : 'إزالة'}
-                              </button>
-                            ) : (
-                              <button type="button" className="icon-button" aria-label="خيارات العضو">
-                                <MoreVertical size={16} />
-                              </button>
-                            )}
-                          </div>
-                        </article>
-                      );
-                    })
-                  )}
-                </div>
-              </section>
+                <TeamPage
+                  userIsBoardOwner={userIsBoardOwner}
+                  isCreatingInvite={isCreatingInvite}
+                  inviteLink={inviteLink}
+                  boardMembers={boardMembers}
+                  roleCounts={roleCounts}
+                  presenceUsers={presenceUsers}
+                  teamRoleFilter={teamRoleFilter}
+                  teamSearchQuery={teamSearchQuery}
+                  filteredBoardMembers={filteredBoardMembers}
+                  onlineMemberIds={onlineMemberIds}
+                  onlineMemberEmails={onlineMemberEmails}
+                  activeBoardTitle={activeBoardTitle}
+                  roleLabels={roleLabels}
+                  updatingMemberRoleId={updatingMemberRoleId}
+                  removingMemberId={removingMemberId}
+                  onCreateInvite={handleCreateInvite}
+                  onCopyInvite={handleCopyInvite}
+                  onRoleFilterChange={setTeamRoleFilter}
+                  onSearchChange={setTeamSearchQuery}
+                  onUpdateMemberRole={handleUpdateMemberRole}
+                  onRemoveMember={handleRemoveMember}
+                />
               ) : null}
 
               {activeSidebarSection === 'kanban' ? (
-              <>
-              <section
-                className="filter-panel rounded-xl bg-surface-container-lowest p-space-md shadow-stitch"
-                id="filters"
-                aria-label="Card filters"
-              >
-                <label>
-                  البحث
-                  <input
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="ابحث في العنوان أو الوصف"
-                  />
-                </label>
-                <label>
-                  الأولوية
-                  <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)}>
-                    <option value="all">كل الأولويات</option>
-                    <option value="urgent">عاجل</option>
-                    <option value="medium">متوسط</option>
-                    <option value="normal">عادي</option>
-                  </select>
-                </label>
-                <label>
-                  التصنيف
-                  <select value={tagFilter} onChange={(event) => setTagFilter(event.target.value)}>
-                    <option value="all">كل التصنيفات</option>
-                    {allTags.map((tag) => (
-                      <option key={tag} value={tag}>
-                        {tag}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  المسؤول
-                  <select value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)}>
-                    <option value="all">كل المسؤولين</option>
-                    <option value="">بدون مسؤول</option>
-                    {boardMembers.map((member) => (
-                      <option key={member.id} value={member.id}>
-                        {member.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="filter-summary">
-                  <span className="rounded-full bg-surface-container px-3 py-2 font-code text-code-sm text-on-surface">
-                    {filteredCardsCount}/{totalCardsCount}
-                  </span>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => {
-                      setSearchQuery('');
-                      setPriorityFilter('all');
-                      setTagFilter('all');
-                      setAssigneeFilter('all');
-                    }}
-                    disabled={!hasActiveFilters}
-                  >
-                    مسح
-                  </button>
-                </div>
-              </section>
-
-              {isLoadingBoard ? (
-                <p className="empty-state">جاري تحميل اللوحة...</p>
-              ) : (
-                <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-                  {userIsBoardOwner ? (
-                  <form className="add-column-form rounded-xl bg-surface-container-lowest p-space-md shadow-stitch" onSubmit={handleCreateColumn}>
-                    <input
-                      value={newColumnTitle}
-                      onChange={(event) => setNewColumnTitle(event.target.value)}
-                      placeholder="إضافة عمود جديد"
-                    />
-                    <button type="submit" className="inline-flex items-center justify-center gap-2" disabled={isCreatingColumn || !newColumnTitle.trim()}>
-                      <Plus size={18} aria-hidden="true" />
-                      {isCreatingColumn ? '...' : 'إضافة عمود'}
-                    </button>
-                  </form>
-                  ) : null}
-
-                  <div className="kanban-board grid grid-cols-1 gap-space-lg md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                    {filteredColumns.map((column, columnIndex) => (
-                      <DroppableColumn key={column.id} column={column} index={columnIndex}>
-                        <header className="column-header flex items-start justify-between gap-space-sm pb-space-sm">
-                          <form className="column-title-form min-w-0 flex-1" onSubmit={(event) => handleUpdateColumn(event, column.id)}>
-                            <div className="flex items-center gap-2">
-                              <span className={`h-2.5 w-2.5 rounded-full ${columnDotStyles[columnIndex % columnDotStyles.length]}`} />
-                              <span className="rounded-full bg-surface-container-highest px-2 py-0.5 text-label-sm font-bold text-on-surface-variant">
-                                {column.cards.length}
-                              </span>
-                            </div>
-                            <input
-                              value={columnDrafts[column.id] ?? column.title}
-                              onChange={(event) =>
-                                setColumnDrafts((currentDrafts) => ({
-                                  ...currentDrafts,
-                                  [column.id]: event.target.value
-                                }))
-                              }
-                              aria-label="Column title"
-                              className="rounded-lg border-0 bg-transparent px-0 text-headline-sm font-semibold text-on-surface focus:outline-none focus:ring-0"
-                              disabled={!userIsBoardOwner}
-                            />
-                            <button
-                              type="submit"
-                              className="small-button inline-flex items-center justify-center rounded-lg bg-surface-container-lowest px-2 text-primary shadow-stitch"
-                              disabled={!userIsBoardOwner || savingColumnId === column.id || !String(columnDrafts[column.id] || '').trim()}
-                            >
-                              {savingColumnId === column.id ? '...' : 'حفظ'}
-                            </button>
-                          </form>
-                          <div className="column-meta flex items-center gap-1 text-on-surface-variant">
-                            <button type="button" className="icon-plain-button" aria-label="Column options">
-                              <MoreHorizontal size={18} aria-hidden="true" />
-                            </button>
-                            <button
-                              type="button"
-                              className="icon-danger-button"
-                              onClick={() => handleDeleteColumn(column.id)}
-                              disabled={!userIsBoardOwner || deletingColumnId === column.id}
-                              title="حذف العمود"
-                              aria-label="Delete column"
-                            >
-                              <Trash2 size={18} aria-hidden="true" />
-                            </button>
-                          </div>
-                        </header>
-
-                        <div className="card-list">
-                          {column.cards.length === 0 ? (
-                            <p className="column-empty">
-                              {hasActiveFilters ? 'لا توجد بطاقات مطابقة.' : 'اسحب بطاقة إلى هنا.'}
-                            </p>
-                          ) : (
-                            column.cards.map((card) => (
-                              <DraggableCard
-                                key={card.id}
-                                card={card}
-                                onOpen={openCard}
-                                canMove={userIsBoardOwner || card.assigneeId === user?.id}
-                              />
-                            ))
-                          )}
-                        </div>
-
-                        {userIsBoardOwner ? (
-                        <form className="card-form" onSubmit={(event) => handleCreateCard(event, column.id)}>
-                          <input
-                            value={cardTitles[column.id] || ''}
-                            onChange={(event) =>
-                              setCardTitles((currentTitles) => ({
-                                ...currentTitles,
-                                [column.id]: event.target.value
-                              }))
-                            }
-                            placeholder="إضافة بطاقة"
-                          />
-                          <button
-                            type="submit"
-                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-surface-container-lowest py-2 text-on-surface-variant shadow-stitch hover:bg-surface-container-high hover:text-on-surface"
-                            disabled={isCreatingCard === column.id}
-                          >
-                            <Plus size={18} aria-hidden="true" />
-                            {isCreatingCard === column.id ? '...' : 'إضافة'}
-                          </button>
-                        </form>
-                        ) : null}
-                      </DroppableColumn>
-                    ))}
-                  </div>
-                </DndContext>
-              )}
-              </>
+                <KanbanPage
+                  sensors={sensors}
+                  searchQuery={searchQuery}
+                  priorityFilter={priorityFilter}
+                  tagFilter={tagFilter}
+                  assigneeFilter={assigneeFilter}
+                  allTags={allTags}
+                  boardMembers={boardMembers}
+                  filteredCardsCount={filteredCardsCount}
+                  totalCardsCount={totalCardsCount}
+                  hasActiveFilters={hasActiveFilters}
+                  isLoadingBoard={isLoadingBoard}
+                  userIsBoardOwner={userIsBoardOwner}
+                  newColumnTitle={newColumnTitle}
+                  isCreatingColumn={isCreatingColumn}
+                  filteredColumns={filteredColumns}
+                  columnDrafts={columnDrafts}
+                  savingColumnId={savingColumnId}
+                  deletingColumnId={deletingColumnId}
+                  cardTitles={cardTitles}
+                  isCreatingCard={isCreatingCard}
+                  user={user}
+                  onSearchChange={setSearchQuery}
+                  onPriorityFilterChange={setPriorityFilter}
+                  onTagFilterChange={setTagFilter}
+                  onAssigneeFilterChange={setAssigneeFilter}
+                  onClearFilters={() => {
+                    setSearchQuery('');
+                    setPriorityFilter('all');
+                    setTagFilter('all');
+                    setAssigneeFilter('all');
+                  }}
+                  onNewColumnTitleChange={setNewColumnTitle}
+                  onCreateColumn={handleCreateColumn}
+                  onColumnDraftChange={(columnId, value) =>
+                    setColumnDrafts((currentDrafts) => ({ ...currentDrafts, [columnId]: value }))
+                  }
+                  onUpdateColumn={handleUpdateColumn}
+                  onDeleteColumn={handleDeleteColumn}
+                  onOpenCard={openCard}
+                  onCardTitleChange={(columnId, value) =>
+                    setCardTitles((currentTitles) => ({ ...currentTitles, [columnId]: value }))
+                  }
+                  onCreateCard={handleCreateCard}
+                  onDragEnd={handleDragEnd}
+                />
               ) : null}
 
               {activeSidebarSection === 'task' ? (
-              selectedCardId ? (
-                <aside className="card-details task-details-page" aria-label="Card details">
-                  <div className="card-details-header task-details-topbar">
-                    <div>
-                      <p className="eyebrow">Card</p>
-                      <h3>{selectedCard?.title || 'جاري فتح البطاقة...'}</h3>
-                    </div>
-                    <div className="details-actions">
-                      <button
-                        type="button"
-                        className="danger-button"
-                        onClick={handleDeleteCard}
-                        disabled={!canDeleteSelectedCard || isDeletingCard || isLoadingCardDetails}
-                      >
-                        {isDeletingCard ? 'جاري الحذف...' : 'حذف'}
-                      </button>
-                      <button type="button" className="secondary-button" onClick={closeCard}>
-                        إغلاق
-                      </button>
-                    </div>
-                  </div>
-
-                  {cardDetailsError ? <p className="form-error">{cardDetailsError}</p> : null}
-
-                  {isLoadingCardDetails ? (
-                    <p className="empty-state">جاري تحميل تفاصيل البطاقة...</p>
-                  ) : selectedCard ? (
-                    <>
-                      <section className="task-detail-hero" aria-label="Task summary">
-                        <div className="task-chip-row">
-                          <span className="task-code">TASK-{String(selectedCard.id || '').slice(0, 4).toUpperCase()}</span>
-                          <span className={`task-priority-chip ${cardDetailsForm.priority || selectedCard.priority || 'normal'}`}>
-                            <Flag size={15} aria-hidden="true" />
-                            {priorityLabels[cardDetailsForm.priority || selectedCard.priority] || priorityLabels.normal}
-                          </span>
-                          {cardDetailsForm.tags.slice(0, 4).map((tag) => (
-                            <span key={tag} className="task-tag-chip">#{tag}</span>
-                          ))}
-                        </div>
-                        <div className="task-property-grid">
-                          <div>
-                            <span><UserRound size={16} aria-hidden="true" /> Assignee</span>
-                            <strong>{boardMembers.find((member) => member.id === cardDetailsForm.assigneeId)?.name || 'Unassigned'}</strong>
-                          </div>
-                          <div>
-                            <span><Calendar size={16} aria-hidden="true" /> Due date</span>
-                            <strong>{cardDetailsForm.dueDate || 'No due date'}</strong>
-                          </div>
-                          <div>
-                            <span><ListChecks size={16} aria-hidden="true" /> Subtasks</span>
-                            <strong>
-                              {cardDetailsForm.checklist.filter((item) => item.status === 'done' || item.done).length}/{cardDetailsForm.checklist.length}
-                            </strong>
-                          </div>
-                        </div>
-                      </section>
-                      <div className="task-details-grid">
-                        <form className="details-form task-main-pane" onSubmit={handleSaveCardDetails}>
-                        <label>
-                          عنوان البطاقة
-                          <input
-                            value={cardDetailsForm.title}
-                            onChange={(event) =>
-                              setCardDetailsForm((currentForm) => ({
-                                ...currentForm,
-                                title: event.target.value
-                              }))
-                            }
-                            placeholder="عنوان البطاقة"
-                            disabled={!canEditSelectedCardDetails}
-                          />
-                        </label>
-                        <label>
-                          الوصف
-                          <textarea
-                            value={cardDetailsForm.description}
-                            onChange={(event) =>
-                              setCardDetailsForm((currentForm) => ({
-                                ...currentForm,
-                                description: event.target.value
-                              }))
-                            }
-                            placeholder="اكتب وصف المهمة"
-                            rows="4"
-                            disabled={!canEditSelectedCardDetails}
-                          />
-                        </label>
-                        <label>
-                          تاريخ الاستحقاق
-                          <input
-                            type="date"
-                            value={cardDetailsForm.dueDate}
-                            onChange={(event) =>
-                              setCardDetailsForm((currentForm) => ({
-                                ...currentForm,
-                                dueDate: event.target.value
-                              }))
-                            }
-                            disabled={!canEditSelectedCardDetails}
-                          />
-                        </label>
-                        <label>
-                          المسؤول
-                          <select
-                            value={cardDetailsForm.assigneeId}
-                            onChange={(event) =>
-                              setCardDetailsForm((currentForm) => ({
-                                ...currentForm,
-                                assigneeId: event.target.value
-                              }))
-                            }
-                            disabled={!canEditSelectedCardDetails}
-                          >
-                            <option value="">بدون مسؤول</option>
-                            {managerMembers.map((member) => (
-                              <option key={member.id} value={member.id}>
-                                {member.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label>
-                          الأولوية
-                          <select
-                            value={cardDetailsForm.priority}
-                            onChange={(event) =>
-                              setCardDetailsForm((currentForm) => ({
-                                ...currentForm,
-                                priority: event.target.value
-                              }))
-                            }
-                            disabled={!canEditSelectedCardDetails}
-                          >
-                            <option value="urgent">عاجل</option>
-                            <option value="medium">متوسط</option>
-                            <option value="normal">عادي</option>
-                          </select>
-                        </label>
-                        <section className="tags-editor" aria-label="Tags">
-                          <div className="tags-editor-header">
-                            <h4>التصنيفات</h4>
-                            <span>{cardDetailsForm.tags.length}/8</span>
-                          </div>
-                          <div className="tag-input-row">
-                            <input
-                              value={cardDetailsForm.tagDraft}
-                              onChange={(event) =>
-                                setCardDetailsForm((currentForm) => ({
-                                  ...currentForm,
-                                  tagDraft: event.target.value
-                                }))
-                              }
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter') {
-                                  event.preventDefault();
-                                  addTag();
-                                }
-                              }}
-                              placeholder="مثلاً: Frontend"
-                              disabled={!canEditSelectedCardDetails}
-                            />
-                            <button
-                              type="button"
-                              className="secondary-button"
-                              onClick={addTag}
-                              disabled={!canEditSelectedCardDetails || !cardDetailsForm.tagDraft.trim() || cardDetailsForm.tags.length >= 8}
-                            >
-                              إضافة
-                            </button>
-                          </div>
-                          {cardDetailsForm.tags.length === 0 ? (
-                            <p className="column-empty">لا توجد تصنيفات بعد.</p>
-                          ) : (
-                            <div className="editable-tag-list">
-                              {cardDetailsForm.tags.map((tag) => (
-                                <span key={tag}>
-                                  {tag}
-                                  <button
-                                    type="button"
-                                    onClick={() => removeTag(tag)}
-                                    aria-label={`Remove ${tag}`}
-                                    disabled={!canEditSelectedCardDetails}
-                                  >
-                                    ×
-                                  </button>
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </section>
-                        <section className="checklist-editor" aria-label="Checklist">
-                          <div className="checklist-header">
-                            <h4>قائمة المهام الفرعية</h4>
-                            <button
-                              type="button"
-                              className="secondary-button small-button"
-                              onClick={addChecklistItem}
-                              disabled={!canEditSelectedSubtasks}
-                            >
-                              إضافة مهمة
-                            </button>
-                          </div>
-                          {cardDetailsForm.checklist.length === 0 ? (
-                            <p className="column-empty">لا توجد مهام فرعية بعد.</p>
-                          ) : (
-                            <div className="checklist-items">
-                              {cardDetailsForm.checklist.map((item) => (
-                                <div key={item.id} className="checklist-item">
-                                  <input
-                                    value={item.text}
-                                    onChange={(event) => updateChecklistItem(item.id, { text: event.target.value })}
-                                    placeholder="اكتب مهمة فرعية"
-                                    disabled={!canEditSelectedSubtasks}
-                                  />
-                                  <select
-                                    value={item.assigneeId || ''}
-                                    onChange={(event) => updateChecklistItem(item.id, { assigneeId: event.target.value })}
-                                    aria-label="Subtask assignee"
-                                    disabled={!canEditSelectedSubtasks}
-                                  >
-                                    <option value="">بدون عضو</option>
-                                    {boardMembers.map((member) => (
-                                      <option key={member.id} value={member.id}>
-                                        {member.name}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  <select
-                                    value={item.status || (item.done ? 'done' : 'todo')}
-                                    onChange={(event) => updateChecklistItem(item.id, { status: event.target.value })}
-                                    aria-label="Subtask status"
-                                    disabled={!canEditSelectedSubtasks && item.assigneeId !== user?.id}
-                                  >
-                                    <option value="todo">لم تبدأ</option>
-                                    <option value="in_progress">قيد التنفيذ</option>
-                                    <option value="done">تم الانتهاء</option>
-                                  </select>
-                                  <button
-                                    type="button"
-                                    className="icon-danger-button"
-                                    onClick={() => removeChecklistItem(item.id)}
-                                    aria-label="Remove checklist item"
-                                    disabled={!canEditSelectedSubtasks}
-                                  >
-                                    ×
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </section>
-                        <button type="submit" disabled={isSavingCardDetails || !canSaveSelectedCard}>
-                          {isSavingCardDetails ? 'جاري الحفظ...' : 'حفظ التفاصيل'}
-                        </button>
-                        </form>
-
-                        <aside className="task-activity-pane">
-                      <section className="comments-panel" aria-label="Card comments">
-                        <h3>التعليقات</h3>
-                        <form className="comment-form" onSubmit={handleAddComment}>
-                          <textarea
-                            value={commentBody}
-                            onChange={(event) => setCommentBody(event.target.value)}
-                            placeholder="اكتب تعليقاً"
-                            rows="3"
-                          />
-                          <button type="submit" disabled={isAddingComment}>
-                            {isAddingComment ? 'جاري الإضافة...' : 'إضافة تعليق'}
-                          </button>
-                        </form>
-
-                        <div className="comments-list">
-                          {comments.length === 0 ? (
-                            <p className="column-empty">لا توجد تعليقات بعد.</p>
-                          ) : (
-                            comments.map((comment) => (
-                              <article key={comment.id} className="comment-card">
-                                <strong>{comment.authorName}</strong>
-                                <p>{comment.body}</p>
-                                <time dateTime={comment.createdAt}>
-                                  {new Date(comment.createdAt).toLocaleString('ar')}
-                                </time>
-                              </article>
-                            ))
-                          )}
-                        </div>
-                      </section>
-                        </aside>
-                      </div>
-                    </>
-                  ) : null}
-                </aside>
-              ) : (
-                <section className="card-details task-details-empty" aria-label="Task details placeholder">
-                  <div className="card-details-header">
-                    <div>
-                      <p className="eyebrow">Task Activity</p>
-                      <h3>Select a card from the Kanban board</h3>
-                    </div>
-                    <button type="button" className="secondary-button" onClick={() => setActiveSidebarSection('kanban')}>
-                      Open Kanban
-                    </button>
-                  </div>
-                  <p className="empty-state">Card details, subtasks, comments, and activity will appear here after you select a card.</p>
-                </section>
-              )
+                <TaskDetailsPage
+                  selectedCardId={selectedCardId}
+                  selectedCard={selectedCard}
+                  priorityLabels={priorityLabels}
+                  cardDetailsForm={cardDetailsForm}
+                  boardMembers={boardMembers}
+                  managerMembers={managerMembers}
+                  canEditSelectedCardDetails={canEditSelectedCardDetails}
+                  canEditSelectedSubtasks={canEditSelectedSubtasks}
+                  canDeleteSelectedCard={canDeleteSelectedCard}
+                  canSaveSelectedCard={canSaveSelectedCard}
+                  isDeletingCard={isDeletingCard}
+                  isLoadingCardDetails={isLoadingCardDetails}
+                  isSavingCardDetails={isSavingCardDetails}
+                  cardDetailsError={cardDetailsError}
+                  comments={comments}
+                  commentBody={commentBody}
+                  isAddingComment={isAddingComment}
+                  user={user}
+                  setCardDetailsForm={setCardDetailsForm}
+                  setCommentBody={setCommentBody}
+                  handleDeleteCard={handleDeleteCard}
+                  closeCard={closeCard}
+                  addTag={addTag}
+                  removeTag={removeTag}
+                  addChecklistItem={addChecklistItem}
+                  updateChecklistItem={updateChecklistItem}
+                  removeChecklistItem={removeChecklistItem}
+                  handleSaveCardDetails={handleSaveCardDetails}
+                  handleAddComment={handleAddComment}
+                  navigateToSection={navigateToSection}
+                />
               ) : null}
             </section>
           ) : null}
