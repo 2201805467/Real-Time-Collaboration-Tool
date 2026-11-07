@@ -372,4 +372,62 @@ test('owner, manager, and member permissions follow the project hierarchy', asyn
   assert.equal(boardSummary.stats.progress, 33.3);
   assert.equal(boardSummary.stats.memberCount, 3);
   assert.equal(boardSummary.stats.memberPreview.length, 3);
+
+  const updatedProfile = await api('/api/auth/profile', {
+    method: 'PATCH',
+    token: owner.token,
+    body: { name: 'Updated Owner', email: 'updated-owner@test.local' }
+  });
+  assert.equal(updatedProfile.status, 200);
+  assert.equal(updatedProfile.data.user.name, 'Updated Owner');
+  assert.equal(updatedProfile.data.user.email, 'updated-owner@test.local');
+
+  const duplicateProfileEmail = await api('/api/auth/profile', {
+    method: 'PATCH',
+    token: updatedProfile.data.token,
+    body: { name: 'Updated Owner', email: 'member@test.local' }
+  });
+  assert.equal(duplicateProfileEmail.status, 409);
+
+  const incorrectCurrentPassword = await api('/api/auth/password', {
+    method: 'PATCH',
+    token: updatedProfile.data.token,
+    body: { currentPassword: 'incorrect', newPassword: 'new-password123' }
+  });
+  assert.equal(incorrectCurrentPassword.status, 400);
+
+  const changedPassword = await api('/api/auth/password', {
+    method: 'PATCH',
+    token: updatedProfile.data.token,
+    body: { currentPassword: 'password123', newPassword: 'new-password123' }
+  });
+  assert.equal(changedPassword.status, 200);
+
+  const oldPasswordLogin = await api('/api/auth/login', {
+    method: 'POST',
+    body: { email: 'updated-owner@test.local', password: 'password123' }
+  });
+  assert.equal(oldPasswordLogin.status, 401);
+
+  const newPasswordLogin = await api('/api/auth/login', {
+    method: 'POST',
+    body: { email: 'updated-owner@test.local', password: 'new-password123' }
+  });
+  assert.equal(newPasswordLogin.status, 200);
+
+  const savedPreferences = await api('/api/auth/preferences', {
+    method: 'PATCH',
+    token: newPasswordLogin.data.token,
+    body: { assignments: false, comments: false }
+  });
+  assert.equal(savedPreferences.status, 200);
+  assert.deepEqual(savedPreferences.data.notificationPreferences, {
+    assignments: false,
+    comments: false
+  });
+
+  const currentUser = await api('/api/auth/me', { token: newPasswordLogin.data.token });
+  assert.equal(currentUser.status, 200);
+  assert.equal(currentUser.data.user.notificationPreferences.assignments, false);
+  assert.equal(currentUser.data.user.notificationPreferences.comments, false);
 });

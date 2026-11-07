@@ -7,6 +7,7 @@ import TeamPage from './pages/TeamPage.jsx';
 import WorkspaceOverviewPage from './pages/WorkspaceOverviewPage.jsx';
 import KanbanPage from './pages/KanbanPage.jsx';
 import TaskDetailsPage from './pages/TaskDetailsPage.jsx';
+import SettingsPage from './pages/SettingsPage.jsx';
 import { boardApi } from './api/boardApi.js';
 import { acceptInvite, createBoard, getInvite } from './api/workspaceApi.js';
 import useAuthSession from './hooks/useAuthSession.js';
@@ -29,6 +30,10 @@ const roleLabels = {
 };
 
 function getWorkspaceRoute(pathname) {
+  if (pathname === '/settings') {
+    return { boardId: '', cardId: '', section: 'settings' };
+  }
+
   const taskRoute = matchPath('/boards/:boardId/tasks/:cardId', pathname);
 
   if (taskRoute) {
@@ -67,6 +72,9 @@ function App() {
     isSubmittingAuth,
     setAuthError,
     submitAuth,
+    saveProfile,
+    savePassword,
+    saveNotificationPreferences,
     logout,
     expireSession
   } = useAuthSession();
@@ -172,6 +180,7 @@ function App() {
       if (selectedBoardId) {
         closeBoard(false);
       }
+      setActiveSidebarSection(workspaceRoute.section);
       return;
     }
 
@@ -627,6 +636,13 @@ function App() {
   function navigateToSection(section) {
     if (section === 'overview') {
       closeBoard();
+      return;
+    }
+
+    if (section === 'settings') {
+      if (selectedBoardId) closeBoard(false);
+      setActiveSidebarSection('settings');
+      navigate('/settings');
       return;
     }
 
@@ -1239,7 +1255,9 @@ function App() {
     canEditSelectedSubtasks ||
     selectedCard.checklist?.some((item) => item.assigneeId === user?.id)
   );
-  const activeBoardTitle = activeBoard?.title || 'لوحة الكانبان';
+  const activeBoardTitle = activeSidebarSection === 'settings'
+    ? 'الإعدادات العامة'
+    : activeBoard?.title || 'لوحة الكانبان';
 
   return (
     <main className={user ? 'workspace-shell' : 'app-shell'}>
@@ -1283,7 +1301,7 @@ function App() {
         />
       ) : null}
 
-      {(!user || !selectedBoardId) ? (
+      {(!user || (!selectedBoardId && activeSidebarSection === 'overview')) ? (
       <section className="intro">
         <div className="mark">RT</div>
         <div>
@@ -1390,7 +1408,7 @@ function App() {
             </section>
           ) : null}
 
-          {!selectedBoardId ? (
+          {!selectedBoardId && activeSidebarSection === 'overview' ? (
             <WorkspaceOverviewPage
               workspaceStats={workspaceStats}
               presenceUsers={presenceUsers}
@@ -1412,6 +1430,17 @@ function App() {
               onDeleteBoard={handleDeleteBoard}
               onNavigate={navigateToSection}
               onLogout={handleLogout}
+            />
+          ) : null}
+
+          {!selectedBoardId && activeSidebarSection === 'settings' ? (
+            <SettingsPage
+              user={user}
+              isDarkMode={isDarkMode}
+              onToggleTheme={toggleTheme}
+              onSaveProfile={saveProfile}
+              onSavePassword={savePassword}
+              onSaveNotificationPreferences={saveNotificationPreferences}
             />
           ) : null}
 

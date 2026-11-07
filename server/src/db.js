@@ -144,6 +144,8 @@ ensureColumn('cards', 'priority', "TEXT NOT NULL DEFAULT 'normal'");
 ensureColumn('cards', 'tags', "TEXT NOT NULL DEFAULT '[]'");
 ensureColumn('cards', 'checklist', "TEXT NOT NULL DEFAULT '[]'");
 ensureColumn('board_members', 'last_seen', 'TEXT');
+ensureColumn('users', 'notify_assignments', 'INTEGER NOT NULL DEFAULT 1');
+ensureColumn('users', 'notify_comments', 'INTEGER NOT NULL DEFAULT 1');
 
 export function getDatabaseSummary() {
   const tables = db

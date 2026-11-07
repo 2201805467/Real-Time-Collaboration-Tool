@@ -137,7 +137,7 @@ function WorkspaceChrome({
             </div>
             <small>{workspaceStats.storage.usedLabel} / {workspaceStats.storage.limitLabel}</small>
           </div>
-          <button type="button">
+          <button type="button" className={activeSection === 'settings' ? 'active' : ''} onClick={() => onNavigate('settings')}>
             <Settings className="nav-icon" size={20} aria-hidden="true" />
             الإعدادات العامة
           </button>

@@ -264,6 +264,67 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
   res.json({ user: getPublicUser(req.user) });
 });
 
+app.patch('/api/auth/profile', requireAuth, (req, res) => {
+  const name = String(req.body.name || '').trim();
+  const email = String(req.body.email || '').trim().toLowerCase();
+
+  if (!name || !email || !email.includes('@')) {
+    return res.status(400).json({ message: 'Valid name and email are required' });
+  }
+
+  try {
+    db.prepare(`
+      UPDATE users SET name = ?, email = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+    `).run(name, email, req.user.id);
+  } catch (error) {
+    if (error.message?.includes('UNIQUE constraint failed: users.email')) {
+      return res.status(409).json({ message: 'Email is already registered' });
+    }
+    throw error;
+  }
+
+  const user = db.prepare(`
+    SELECT id, name, email, created_at AS createdAt,
+      notify_assignments AS notifyAssignments,
+      notify_comments AS notifyComments
+    FROM users WHERE id = ?
+  `).get(req.user.id);
+  const publicUser = getPublicUser(user);
+  res.json({ user: publicUser, token: createToken(publicUser) });
+});
+
+app.patch('/api/auth/password', requireAuth, (req, res) => {
+  const currentPassword = String(req.body.currentPassword || '');
+  const newPassword = String(req.body.newPassword || '');
+  const user = db.prepare('SELECT password_hash AS passwordHash FROM users WHERE id = ?')
+    .get(req.user.id);
+
+  if (!verifyPassword(currentPassword, user.passwordHash)) {
+    return res.status(400).json({ message: 'Current password is incorrect' });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ message: 'New password must contain at least 6 characters' });
+  }
+
+  db.prepare(`
+    UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+  `).run(hashPassword(newPassword), req.user.id);
+  res.json({ ok: true });
+});
+
+app.patch('/api/auth/preferences', requireAuth, (req, res) => {
+  const assignments = req.body.assignments !== false;
+  const comments = req.body.comments !== false;
+  db.prepare(`
+    UPDATE users
+    SET notify_assignments = ?, notify_comments = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(assignments ? 1 : 0, comments ? 1 : 0, req.user.id);
+
+  res.json({ notificationPreferences: { assignments, comments } });
+});
+
 app.get('/api/notifications', requireAuth, (req, res) => {
   const notifications = db.prepare(`
     SELECT
@@ -358,6 +419,16 @@ function logActivity(boardId, userId, action, entityType, entityId, metadata = {
 
 function createNotification({ userId, boardId, actorId, type, entityType, entityId, message }) {
   if (!userId || userId === actorId) {
+    return null;
+  }
+
+  const preferences = db.prepare(`
+    SELECT notify_assignments AS assignments, notify_comments AS comments
+    FROM users WHERE id = ?
+  `).get(userId);
+  const isCommentNotification = type === 'card_commented';
+
+  if (!preferences || (isCommentNotification ? !preferences.comments : !preferences.assignments)) {
     return null;
   }
 

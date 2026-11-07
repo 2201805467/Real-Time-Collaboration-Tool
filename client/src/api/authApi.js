@@ -15,3 +15,15 @@ export function authenticate(mode, form) {
     body
   });
 }
+
+export function updateProfile(profile, token) {
+  return apiRequest('/api/auth/profile', { method: 'PATCH', token, body: profile });
+}
+
+export function changePassword(passwords, token) {
+  return apiRequest('/api/auth/password', { method: 'PATCH', token, body: passwords });
+}
+
+export function updateNotificationPreferences(preferences, token) {
+  return apiRequest('/api/auth/preferences', { method: 'PATCH', token, body: preferences });
+}

@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
-import { authenticate, getCurrentUser } from '../api/authApi.js';
+import {
+  authenticate,
+  changePassword,
+  getCurrentUser,
+  updateNotificationPreferences,
+  updateProfile
+} from '../api/authApi.js';
 
 const tokenKey = 'collab-token';
 
@@ -69,6 +75,27 @@ export default function useAuthSession() {
     setAuthError(message);
   }
 
+  async function saveProfile(profile) {
+    const data = await updateProfile(profile, token);
+    localStorage.setItem(tokenKey, data.token);
+    setToken(data.token);
+    setUser(data.user);
+    return data.user;
+  }
+
+  async function savePassword(passwords) {
+    return changePassword(passwords, token);
+  }
+
+  async function saveNotificationPreferences(preferences) {
+    const data = await updateNotificationPreferences(preferences, token);
+    setUser((currentUser) => ({
+      ...currentUser,
+      notificationPreferences: data.notificationPreferences
+    }));
+    return data.notificationPreferences;
+  }
+
   return {
     token,
     user,
@@ -76,6 +103,9 @@ export default function useAuthSession() {
     isSubmittingAuth,
     setAuthError,
     submitAuth,
+    saveProfile,
+    savePassword,
+    saveNotificationPreferences,
     logout,
     expireSession
   };

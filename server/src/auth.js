@@ -82,7 +82,12 @@ export function getPublicUser(user) {
   return {
     id: user.id,
     name: user.name,
-    email: user.email
+    email: user.email,
+    createdAt: user.createdAt || user.created_at || null,
+    notificationPreferences: {
+      assignments: Boolean(user.notifyAssignments ?? user.notify_assignments ?? 1),
+      comments: Boolean(user.notifyComments ?? user.notify_comments ?? 1)
+    }
   };
 }
 
@@ -96,7 +101,12 @@ export function requireAuth(req, res, next) {
   }
 
   const user = db
-    .prepare('SELECT id, name, email FROM users WHERE id = ?')
+    .prepare(`
+      SELECT id, name, email, created_at AS createdAt,
+        notify_assignments AS notifyAssignments,
+        notify_comments AS notifyComments
+      FROM users WHERE id = ?
+    `)
     .get(payload.sub);
 
   if (!user) {
