@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { matchPath, useLocation, useNavigate } from 'react-router-dom';
 import WorkspaceChrome from './components/WorkspaceChrome.jsx';
+import ShareBoardDialog from './components/ShareBoardDialog.jsx';
 import TeamPage from './pages/TeamPage.jsx';
 import WorkspaceOverviewPage from './pages/WorkspaceOverviewPage.jsx';
 import KanbanPage from './pages/KanbanPage.jsx';
@@ -86,6 +87,10 @@ function App() {
   const [inviteNotice, setInviteNotice] = useState('');
   const [isCreatingInvite, setIsCreatingInvite] = useState(false);
   const [isAcceptingInvite, setIsAcceptingInvite] = useState(false);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [boardInvites, setBoardInvites] = useState([]);
+  const [isLoadingInvites, setIsLoadingInvites] = useState(false);
+  const [revokingInviteId, setRevokingInviteId] = useState('');
   const {
     selectedBoardId,
     setSelectedBoardId,
@@ -557,6 +562,8 @@ function App() {
     setActiveSidebarSection('overview');
     setPresenceUsers([]);
     setCardTitles({});
+    setIsShareDialogOpen(false);
+    setBoardInvites([]);
     closeCard(false);
 
     if (updateRoute) {
@@ -575,7 +582,7 @@ function App() {
     }
 
     if (section === 'share') {
-      handleCreateInvite();
+      handleOpenShareDialog();
       return;
     }
 
@@ -635,13 +642,57 @@ function App() {
 
     try {
       const data = await boardApi.createInvite(selectedBoardId, token);
-      const nextInviteLink = `${window.location.origin}${window.location.pathname}?invite=${data.invite.token}`;
+      const nextInviteLink = `${window.location.origin}/?invite=${encodeURIComponent(data.invite.token)}`;
       setInviteLink(nextInviteLink);
+      setBoardInvites((currentInvites) => [
+        { ...data.invite, createdAt: new Date().toISOString() },
+        ...currentInvites.filter((invite) => invite.id !== data.invite.id)
+      ]);
       setInviteNotice('تم إنشاء رابط الدعوة. صالح لمدة 7 أيام.');
     } catch (error) {
       setInviteError(error.message);
     } finally {
       setIsCreatingInvite(false);
+    }
+  }
+
+  async function handleOpenShareDialog() {
+    if (!selectedBoardId || activeBoard?.role !== 'owner') {
+      return;
+    }
+
+    setIsShareDialogOpen(true);
+    setInviteError('');
+    setInviteNotice('');
+    setIsLoadingInvites(true);
+
+    try {
+      const data = await boardApi.getInvites(selectedBoardId, token);
+      setBoardInvites(data.invites || []);
+    } catch (error) {
+      setInviteError(error.message);
+    } finally {
+      setIsLoadingInvites(false);
+    }
+  }
+
+  async function handleRevokeInvite(inviteId) {
+    if (!selectedBoardId || !window.confirm('هل تريد إلغاء رابط الدعوة؟ لن يتمكن أحد من استخدامه بعد الآن.')) {
+      return;
+    }
+
+    setInviteError('');
+    setInviteNotice('');
+    setRevokingInviteId(inviteId);
+
+    try {
+      await boardApi.revokeInvite(selectedBoardId, inviteId, token);
+      setBoardInvites((currentInvites) => currentInvites.filter((invite) => invite.id !== inviteId));
+      setInviteNotice('تم إلغاء رابط الدعوة.');
+    } catch (error) {
+      setInviteError(error.message);
+    } finally {
+      setRevokingInviteId('');
     }
   }
 
@@ -782,13 +833,15 @@ function App() {
     }
   }
 
-  async function handleCopyInvite() {
-    if (!inviteLink) {
+  async function handleCopyInvite(linkToCopy = inviteLink) {
+    const copyValue = typeof linkToCopy === 'string' ? linkToCopy : inviteLink;
+
+    if (!copyValue) {
       return;
     }
 
     try {
-      await navigator.clipboard.writeText(inviteLink);
+      await navigator.clipboard.writeText(copyValue);
       setInviteNotice('تم نسخ رابط الدعوة.');
     } catch {
       setInviteNotice('انسخ الرابط يدوياً من الحقل.');
@@ -1145,6 +1198,22 @@ function App() {
           userIsBoardOwner={userIsBoardOwner}
           onBoardChange={(boardId) => (boardId ? openBoard(boardId) : closeBoard())}
           onNavigate={navigateToSection}
+        />
+      ) : null}
+
+      {user && selectedBoardId && isShareDialogOpen ? (
+        <ShareBoardDialog
+          boardTitle={activeBoardTitle}
+          invites={boardInvites}
+          isLoading={isLoadingInvites}
+          isCreating={isCreatingInvite}
+          revokingInviteId={revokingInviteId}
+          error={inviteError}
+          notice={inviteNotice}
+          onClose={() => setIsShareDialogOpen(false)}
+          onCreate={handleCreateInvite}
+          onCopy={handleCopyInvite}
+          onRevoke={handleRevokeInvite}
         />
       ) : null}
 

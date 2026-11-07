@@ -1191,6 +1191,147 @@ button:disabled {
   padding: 0;
 }
 
+.share-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(20 18 32 / 0.48);
+  backdrop-filter: blur(5px);
+}
+
+.share-dialog {
+  width: min(100%, 680px);
+  max-height: min(760px, calc(100vh - 40px));
+  overflow: auto;
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  border: 1px solid var(--outline-variant);
+  border-radius: 18px;
+  color: var(--on-surface);
+  background: var(--surface-lowest);
+  box-shadow: 0 24px 70px rgb(20 18 32 / 0.28);
+}
+
+.share-dialog > header,
+.share-dialog-heading,
+.share-dialog-intro,
+.share-invites-header,
+.share-invites-list article {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.share-dialog-heading {
+  justify-content: flex-start;
+}
+
+.share-dialog-heading > span {
+  width: 42px;
+  height: 42px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 12px;
+  color: var(--primary);
+  background: var(--primary-fixed);
+}
+
+.share-dialog h2,
+.share-dialog h3,
+.share-dialog p {
+  margin: 0;
+}
+
+.share-dialog header p,
+.share-dialog-intro p,
+.share-invites-list small {
+  color: var(--on-surface-variant);
+}
+
+.share-dialog-intro {
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--surface-container-low);
+}
+
+.share-dialog-intro > button,
+.share-invites-list .secondary-button {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.share-invites-header {
+  border-bottom: 1px solid var(--outline-variant);
+  padding-bottom: 10px;
+}
+
+.share-invites-header span {
+  min-width: 28px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  text-align: center;
+  color: var(--on-primary-fixed-variant);
+  background: var(--primary-fixed);
+  font-weight: 800;
+}
+
+.share-invites-list {
+  display: grid;
+  gap: 10px;
+}
+
+.share-invites-list article {
+  padding: 12px;
+  border: 1px solid var(--outline-variant);
+  border-radius: 12px;
+  background: var(--surface-container-lowest);
+}
+
+.share-invites-list article > div {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 5px;
+}
+
+.share-invites-list input {
+  width: 100%;
+  direction: ltr;
+  text-align: left;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.75rem;
+}
+
+.share-invites-list .icon-danger-button {
+  width: 38px;
+  height: 38px;
+  min-height: 0;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+}
+
+@media (max-width: 640px) {
+  .share-dialog-intro,
+  .share-invites-list article {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .share-invites-list .icon-danger-button {
+    width: 100%;
+  }
+}
+
 .hub-board-progress {
   display: grid;
   gap: 8px;

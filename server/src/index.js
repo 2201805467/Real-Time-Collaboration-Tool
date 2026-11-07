@@ -650,6 +650,57 @@ app.post('/api/boards/:boardId/invites', requireAuth, (req, res) => {
   });
 });
 
+app.get('/api/boards/:boardId/invites', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+
+  if (!board) {
+    return res.status(404).json({ message: 'Board not found' });
+  }
+
+  if (!requireOwner(board, res)) {
+    return;
+  }
+
+  const invites = db
+    .prepare(`
+      SELECT
+        id,
+        board_id AS boardId,
+        token,
+        expires_at AS expiresAt,
+        created_at AS createdAt
+      FROM board_invites
+      WHERE board_id = ?
+        AND (expires_at IS NULL OR datetime(expires_at) > CURRENT_TIMESTAMP)
+      ORDER BY created_at DESC
+    `)
+    .all(board.id);
+
+  return res.json({ invites });
+});
+
+app.delete('/api/boards/:boardId/invites/:inviteId', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+
+  if (!board) {
+    return res.status(404).json({ message: 'Board not found' });
+  }
+
+  if (!requireOwner(board, res)) {
+    return;
+  }
+
+  const result = db
+    .prepare('DELETE FROM board_invites WHERE id = ? AND board_id = ?')
+    .run(req.params.inviteId, board.id);
+
+  if (result.changes === 0) {
+    return res.status(404).json({ message: 'Invite not found' });
+  }
+
+  return res.json({ inviteId: req.params.inviteId });
+});
+
 app.get('/api/invites/:token', (req, res) => {
   const invite = db
     .prepare(`

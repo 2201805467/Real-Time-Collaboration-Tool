@@ -107,6 +107,32 @@ test('owner, manager, and member permissions follow the project hierarchy', asyn
     assert.equal(accepted.status, 200);
   }
 
+  const memberCannotListInvites = await api(`/api/boards/${boardId}/invites`, {
+    token: member.token
+  });
+  assert.equal(memberCannotListInvites.status, 403);
+
+  const ownerInvites = await api(`/api/boards/${boardId}/invites`, {
+    token: owner.token
+  });
+  assert.equal(ownerInvites.status, 200);
+  assert.equal(ownerInvites.data.invites.length, 1);
+
+  const memberCannotRevokeInvite = await api(
+    `/api/boards/${boardId}/invites/${invite.data.invite.id}`,
+    { method: 'DELETE', token: member.token }
+  );
+  assert.equal(memberCannotRevokeInvite.status, 403);
+
+  const ownerRevokesInvite = await api(
+    `/api/boards/${boardId}/invites/${invite.data.invite.id}`,
+    { method: 'DELETE', token: owner.token }
+  );
+  assert.equal(ownerRevokesInvite.status, 200);
+
+  const revokedInviteIsInvalid = await api(`/api/invites/${inviteToken}`);
+  assert.equal(revokedInviteIsInvalid.status, 404);
+
   const memberCannotRenameBoard = await api(`/api/boards/${boardId}`, {
     method: 'PATCH',
     token: member.token,
