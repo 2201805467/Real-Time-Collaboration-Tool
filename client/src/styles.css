@@ -1057,6 +1057,24 @@ button:disabled {
   outline: 0;
 }
 
+.hub-search .hub-search-clear {
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border-radius: 8px;
+  color: var(--on-surface-variant);
+  background: transparent;
+}
+
+.hub-search .hub-search-clear:hover {
+  color: var(--on-surface);
+  background: var(--surface-container-high);
+}
+
 .hub-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
@@ -1140,6 +1158,37 @@ button:disabled {
 
 .hub-board-card p {
   color: var(--on-surface-variant);
+}
+
+.hub-board-rename {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 8px;
+}
+
+.hub-board-rename input {
+  min-height: 40px;
+}
+
+.hub-board-rename > div,
+.hub-board-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.hub-board-actions {
+  justify-content: flex-end;
+}
+
+.hub-board-actions .icon-button,
+.hub-board-actions .icon-danger-button {
+  width: 34px;
+  height: 34px;
+  min-height: 0;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
 }
 
 .hub-board-progress {

@@ -1,15 +1,18 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   CircleCheck,
   FolderOpen,
   Gauge,
   Grid2X2,
   LogOut,
+  Pencil,
   Plus,
   Search,
   Share2,
   SlidersHorizontal,
+  Trash2,
   UsersRound,
+  X,
   Zap
 } from 'lucide-react';
 
@@ -25,12 +28,52 @@ function WorkspaceOverviewPage({
   roleLabels,
   workspaceActivity,
   user,
+  savingBoardId,
+  deletingBoardId,
   onBoardTitleChange,
   onCreateBoard,
   onOpenBoard,
+  onRenameBoard,
+  onDeleteBoard,
   onNavigate,
   onLogout
 }) {
+  const [projectFilter, setProjectFilter] = useState('all');
+  const [projectSearch, setProjectSearch] = useState('');
+  const [editingBoardId, setEditingBoardId] = useState('');
+  const [editingBoardTitle, setEditingBoardTitle] = useState('');
+  const normalizedSearch = projectSearch.trim().toLowerCase();
+  const displayedBoards = useMemo(
+    () => boards.filter((board) => {
+      const matchesFilter =
+        projectFilter === 'all' ||
+        (projectFilter === 'owned' && board.role === 'owner') ||
+        (projectFilter === 'shared' && board.role !== 'owner');
+      const matchesSearch = !normalizedSearch || board.title.toLowerCase().includes(normalizedSearch);
+      return matchesFilter && matchesSearch;
+    }),
+    [boards, projectFilter, normalizedSearch]
+  );
+
+  function startEditingBoard(board) {
+    setEditingBoardId(board.id);
+    setEditingBoardTitle(board.title);
+  }
+
+  function cancelEditingBoard() {
+    setEditingBoardId('');
+    setEditingBoardTitle('');
+  }
+
+  async function submitBoardRename(event, boardId) {
+    event.preventDefault();
+    const renamed = await onRenameBoard(boardId, editingBoardTitle);
+
+    if (renamed) {
+      cancelEditingBoard();
+    }
+  }
+
   return (
     <section className="dashboard-panel workspace-hub" aria-label="مركز مساحات العمل والمشاريع">
       <div className="workspace-hub-head">
@@ -83,13 +126,16 @@ function WorkspaceOverviewPage({
 
       <div className="hub-command-bar">
         <div className="hub-tabs" aria-label="Workspace filters">
-          <button type="button" className="active">جميع المساحات <span>{workspaceStats.boards.total}</span></button>
-          <button type="button">أملكها <span>{workspaceStats.boards.owned}</span></button>
-          <button type="button">مشتركة <span>{workspaceStats.boards.shared}</span></button>
+          <button type="button" className={projectFilter === 'all' ? 'active' : ''} onClick={() => setProjectFilter('all')}>جميع المساحات <span>{workspaceStats.boards.total}</span></button>
+          <button type="button" className={projectFilter === 'owned' ? 'active' : ''} onClick={() => setProjectFilter('owned')}>أملكها <span>{workspaceStats.boards.owned}</span></button>
+          <button type="button" className={projectFilter === 'shared' ? 'active' : ''} onClick={() => setProjectFilter('shared')}>مشتركة <span>{workspaceStats.boards.shared}</span></button>
         </div>
         <div className="hub-search">
           <Search size={18} aria-hidden="true" />
-          <input placeholder="البحث عن لوحة أو مشروع..." aria-label="Search boards" />
+          <input value={projectSearch} onChange={(event) => setProjectSearch(event.target.value)} placeholder="البحث عن لوحة أو مشروع..." aria-label="البحث عن المشاريع" />
+          {projectSearch ? (
+            <button type="button" className="hub-search-clear" onClick={() => setProjectSearch('')} aria-label="مسح البحث"><X size={16} /></button>
+          ) : null}
           <Grid2X2 size={18} aria-hidden="true" />
         </div>
       </div>
@@ -99,7 +145,7 @@ function WorkspaceOverviewPage({
           <div className="hub-section-title">
             <div>
               <h3>لوحات العمل النشطة</h3>
-              <p>{isLoadingBoards ? 'جاري تحميل اللوحات...' : `${boards.length} لوحة معروضة`}</p>
+              <p>{isLoadingBoards ? 'جاري تحميل اللوحات...' : `${displayedBoards.length} من ${boards.length} مشروع معروض`}</p>
             </div>
             <span><Zap size={14} aria-hidden="true" /> التحديث التلقائي نشط</span>
           </div>
@@ -120,10 +166,14 @@ function WorkspaceOverviewPage({
           <div className="boards-list hub-board-grid">
             {isLoadingBoards ? (
               <p className="empty-state">جاري تحميل اللوحات...</p>
-            ) : boards.length === 0 ? (
-              <p className="empty-state">لا توجد لوحات مشاريع بعد. أنشئ أول لوحة لبدء التعاون.</p>
+            ) : displayedBoards.length === 0 ? (
+              <p className="empty-state">
+                {boards.length === 0
+                  ? 'لا توجد لوحات مشاريع بعد. أنشئ أول لوحة لبدء التعاون.'
+                  : 'لا توجد مشاريع تطابق البحث أو التصفية الحالية.'}
+              </p>
             ) : (
-              boards.map((board, index) => (
+              displayedBoards.map((board, index) => (
                 <article key={board.id} className="board-card hub-board-card">
                   <span className="hub-board-accent" />
                   <div className="hub-board-topline">
@@ -135,7 +185,23 @@ function WorkspaceOverviewPage({
                       <span>UI System</span>
                       <span>{roleLabels[board.role] || roleLabels.member}</span>
                     </div>
-                    <h2>{board.title}</h2>
+                    {editingBoardId === board.id ? (
+                      <form className="hub-board-rename" onSubmit={(event) => submitBoardRename(event, board.id)}>
+                        <input
+                          value={editingBoardTitle}
+                          onChange={(event) => setEditingBoardTitle(event.target.value)}
+                          autoFocus
+                          maxLength="120"
+                          aria-label="اسم المشروع الجديد"
+                        />
+                        <div>
+                          <button type="submit" className="small-button" disabled={savingBoardId === board.id || !editingBoardTitle.trim()}>
+                            {savingBoardId === board.id ? 'جاري الحفظ...' : 'حفظ'}
+                          </button>
+                          <button type="button" className="secondary-button small-button" onClick={cancelEditingBoard} disabled={savingBoardId === board.id}>إلغاء</button>
+                        </div>
+                      </form>
+                    ) : <h2>{board.title}</h2>}
                     <p>افتح لوحة الكانبان، أدِر الأعمدة والبطاقات، وتعاون لحظيا مع الفريق.</p>
                   </div>
                   <div className="hub-board-progress">
@@ -145,7 +211,15 @@ function WorkspaceOverviewPage({
                   <div className="hub-board-footer">
                     <span>{index + 1 < 10 ? `0${index + 1}` : index + 1}</span>
                     <div className="hub-mini-avatars" aria-hidden="true"><span>س</span><span>ع</span><span>+</span></div>
-                    <button type="button" className="small-button" onClick={() => onOpenBoard(board.id)}>فتح المشروع</button>
+                    <div className="hub-board-actions">
+                      {board.role === 'owner' ? (
+                        <>
+                          <button type="button" className="icon-button" onClick={() => startEditingBoard(board)} disabled={savingBoardId === board.id || deletingBoardId === board.id} title="تعديل اسم المشروع" aria-label="تعديل اسم المشروع"><Pencil size={15} /></button>
+                          <button type="button" className="icon-danger-button" onClick={() => onDeleteBoard(board.id, board.title)} disabled={deletingBoardId === board.id || savingBoardId === board.id} title="حذف المشروع" aria-label="حذف المشروع"><Trash2 size={15} /></button>
+                        </>
+                      ) : null}
+                      <button type="button" className="small-button" onClick={() => onOpenBoard(board.id)}>فتح المشروع</button>
+                    </div>
                   </div>
                 </article>
               ))

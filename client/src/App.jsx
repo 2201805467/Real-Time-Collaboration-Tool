@@ -106,13 +106,12 @@ function App() {
     removeCardFromState,
     resetActiveBoard
   } = useActiveBoard();
-  const [editingBoardTitle, setEditingBoardTitle] = useState('');
+  const [savingBoardId, setSavingBoardId] = useState('');
+  const [deletingBoardId, setDeletingBoardId] = useState('');
   const [newColumnTitle, setNewColumnTitle] = useState('');
   const [columnDrafts, setColumnDrafts] = useState({});
   const [boardError, setBoardError] = useState('');
   const [isLoadingBoard, setIsLoadingBoard] = useState(false);
-  const [isSavingBoard, setIsSavingBoard] = useState(false);
-  const [isDeletingBoard, setIsDeletingBoard] = useState(false);
   const [isCreatingColumn, setIsCreatingColumn] = useState(false);
   const [savingColumnId, setSavingColumnId] = useState('');
   const [deletingColumnId, setDeletingColumnId] = useState('');
@@ -528,7 +527,6 @@ function App() {
       setActiveBoard(data.board);
       setColumns(data.columns);
       loadBoardMembers(boardId);
-      setEditingBoardTitle(data.board.title);
       setColumnDrafts(
         Object.fromEntries(data.columns.map((column) => [column.id, column.title]))
       );
@@ -550,7 +548,6 @@ function App() {
 
   function closeBoard(updateRoute = true) {
     resetActiveBoard();
-    setEditingBoardTitle('');
     setNewColumnTitle('');
     setColumnDrafts({});
     setSearchQuery('');
@@ -648,48 +645,59 @@ function App() {
     }
   }
 
-  async function handleUpdateBoard(event) {
-    event.preventDefault();
-    const title = editingBoardTitle.trim();
+  async function handleRenameBoard(boardId, title) {
+    const nextTitle = String(title || '').trim();
 
-    if (!selectedBoardId || !title) {
-      return;
+    if (!boardId || !nextTitle) {
+      return false;
     }
 
-    setBoardError('');
-    setIsSavingBoard(true);
+    setBoardsError('');
+    setSavingBoardId(boardId);
 
     try {
-      const data = await boardApi.update(selectedBoardId, title, token);
-      setActiveBoard(data.board);
+      const data = await boardApi.update(boardId, nextTitle, token);
       setBoards((currentBoards) =>
-        currentBoards.map((board) => (board.id === data.board.id ? { ...board, ...data.board } : board))
+        currentBoards.map((board) =>
+          board.id === data.board.id ? { ...board, ...data.board } : board
+        )
       );
-      loadWorkspaceOverview();
+      setActiveBoard((currentBoard) =>
+        currentBoard?.id === data.board.id ? { ...currentBoard, ...data.board } : currentBoard
+      );
+      await loadWorkspaceOverview();
+      return true;
     } catch (error) {
-      setBoardError(error.message);
+      setBoardsError(error.message);
+      return false;
     } finally {
-      setIsSavingBoard(false);
+      setSavingBoardId('');
     }
   }
 
-  async function handleDeleteBoard() {
-    if (!selectedBoardId || !window.confirm('هل تريد حذف هذه اللوحة نهائياً؟')) {
+  async function handleDeleteBoard(boardId, boardTitleToDelete) {
+    if (
+      !boardId ||
+      !window.confirm(`هل تريد حذف مشروع «${boardTitleToDelete}» نهائياً؟ لا يمكن التراجع عن ذلك.`)
+    ) {
       return;
     }
 
-    setBoardError('');
-    setIsDeletingBoard(true);
+    setBoardsError('');
+    setDeletingBoardId(boardId);
 
     try {
-      await boardApi.remove(selectedBoardId, token);
-      setBoards((currentBoards) => currentBoards.filter((board) => board.id !== selectedBoardId));
-      loadWorkspaceOverview();
-      closeBoard();
+      await boardApi.remove(boardId, token);
+      setBoards((currentBoards) => currentBoards.filter((board) => board.id !== boardId));
+      await loadWorkspaceOverview();
+
+      if (selectedBoardId === boardId) {
+        closeBoard();
+      }
     } catch (error) {
-      setBoardError(error.message);
+      setBoardsError(error.message);
     } finally {
-      setIsDeletingBoard(false);
+      setDeletingBoardId('');
     }
   }
 
@@ -1260,9 +1268,13 @@ function App() {
               roleLabels={roleLabels}
               workspaceActivity={workspaceActivity}
               user={user}
+              savingBoardId={savingBoardId}
+              deletingBoardId={deletingBoardId}
               onBoardTitleChange={setBoardTitle}
               onCreateBoard={handleCreateBoard}
               onOpenBoard={openBoard}
+              onRenameBoard={handleRenameBoard}
+              onDeleteBoard={handleDeleteBoard}
               onNavigate={navigateToSection}
               onLogout={handleLogout}
             />

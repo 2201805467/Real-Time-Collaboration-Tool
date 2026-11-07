@@ -107,6 +107,19 @@ test('owner, manager, and member permissions follow the project hierarchy', asyn
     assert.equal(accepted.status, 200);
   }
 
+  const memberCannotRenameBoard = await api(`/api/boards/${boardId}`, {
+    method: 'PATCH',
+    token: member.token,
+    body: { title: 'Unauthorized title' }
+  });
+  assert.equal(memberCannotRenameBoard.status, 403);
+
+  const memberCannotDeleteBoard = await api(`/api/boards/${boardId}`, {
+    method: 'DELETE',
+    token: member.token
+  });
+  assert.equal(memberCannotDeleteBoard.status, 403);
+
   const promoted = await api(`/api/boards/${boardId}/members/${manager.user.id}`, {
     method: 'PATCH',
     token: owner.token,
@@ -114,6 +127,13 @@ test('owner, manager, and member permissions follow the project hierarchy', asyn
   });
   assert.equal(promoted.status, 200);
   assert.equal(promoted.data.member.role, 'manager');
+
+  const managerCannotRenameBoard = await api(`/api/boards/${boardId}`, {
+    method: 'PATCH',
+    token: manager.token,
+    body: { title: 'Manager title' }
+  });
+  assert.equal(managerCannotRenameBoard.status, 403);
 
   const board = await api(`/api/boards/${boardId}`, { token: owner.token });
   assert.equal(board.status, 200);
