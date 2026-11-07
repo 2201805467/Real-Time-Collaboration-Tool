@@ -7,32 +7,11 @@ import TeamPage from './pages/TeamPage.jsx';
 import WorkspaceOverviewPage from './pages/WorkspaceOverviewPage.jsx';
 import KanbanPage from './pages/KanbanPage.jsx';
 import TaskDetailsPage from './pages/TaskDetailsPage.jsx';
-
-const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:4000';
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-
-async function readJsonResponse(response) {
-  const contentType = response.headers.get('content-type') || '';
-
-  if (!contentType.includes('application/json')) {
-    await response.text();
-    throw new Error(
-      response.ok
-        ? 'استلم التطبيق رداً غير صالح من السيرفر.'
-        : `تعذر الوصول إلى API الصحيح (HTTP ${response.status}). تأكد أن السيرفر يعمل على المنفذ 4000.`
-    );
-  }
-
-  return response.json();
-}
-
-const emptyWorkspaceStats = {
-  boards: { total: 0, owned: 0, shared: 0 },
-  cards: { total: 0, completed: 0, completedThisWeek: 0 },
-  checklist: { total: 0, completed: 0 },
-  velocity: 0,
-  storage: { usedPercent: 0, usedLabel: '0 GB', limitLabel: '20 GB' }
-};
+import { socketUrl } from './api/client.js';
+import { boardApi } from './api/boardApi.js';
+import { acceptInvite, createBoard, getInvite } from './api/workspaceApi.js';
+import useAuthSession from './hooks/useAuthSession.js';
+import useWorkspaceData from './hooks/useWorkspaceData.js';
 
 const priorityLabels = {
   urgent: 'عاجل',
@@ -82,14 +61,28 @@ function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [authMode, setAuthMode] = useState('login');
   const [authForm, setAuthForm] = useState({ name: '', email: '', password: '' });
-  const [authError, setAuthError] = useState('');
-  const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
-  const [token, setToken] = useState(() => localStorage.getItem('collab-token') || '');
-  const [user, setUser] = useState(null);
-  const [boards, setBoards] = useState([]);
+  const {
+    token,
+    user,
+    authError,
+    isSubmittingAuth,
+    setAuthError,
+    submitAuth,
+    logout,
+    expireSession
+  } = useAuthSession();
+  const {
+    boards,
+    setBoards,
+    boardsError,
+    setBoardsError,
+    isLoadingBoards,
+    workspaceStats,
+    workspaceActivity,
+    loadWorkspaceOverview,
+    resetWorkspace
+  } = useWorkspaceData(token, user);
   const [boardTitle, setBoardTitle] = useState('');
-  const [boardsError, setBoardsError] = useState('');
-  const [isLoadingBoards, setIsLoadingBoards] = useState(false);
   const [isCreatingBoard, setIsCreatingBoard] = useState(false);
   const [inviteToken, setInviteToken] = useState(() => new URLSearchParams(window.location.search).get('invite') || '');
   const [inviteInfo, setInviteInfo] = useState(null);
@@ -143,41 +136,6 @@ function App() {
   const [isLoadingCardDetails, setIsLoadingCardDetails] = useState(false);
   const [isSavingCardDetails, setIsSavingCardDetails] = useState(false);
   const [isAddingComment, setIsAddingComment] = useState(false);
-  const [workspaceStats, setWorkspaceStats] = useState(emptyWorkspaceStats);
-  const [workspaceActivity, setWorkspaceActivity] = useState([]);
-
-  useEffect(() => {
-    if (!token) {
-      return;
-    }
-
-    fetch(`${apiUrl}/api/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error('Session expired');
-        }
-
-        return response.json();
-      })
-      .then((data) => setUser(data.user))
-      .catch(() => {
-        localStorage.removeItem('collab-token');
-        setToken('');
-        setUser(null);
-        setBoards([]);
-        setSelectedBoardId('');
-        setActiveBoard(null);
-        setColumns([]);
-      });
-  }, [token]);
-
-  useEffect(() => {
-    if (user && token) {
-      loadBoards();
-    }
-  }, [user, token]);
 
   useEffect(() => {
     if (!user) {
@@ -214,16 +172,7 @@ function App() {
 
     setInviteError('');
 
-    fetch(`${apiUrl}/api/invites/${inviteToken}`)
-      .then((response) =>
-        response.json().then((data) => {
-          if (!response.ok) {
-            throw new Error(data.message || 'Could not load invite');
-          }
-
-          return data;
-        })
-      )
+    getInvite(inviteToken)
       .then((data) => setInviteInfo(data.invite))
       .catch((error) => setInviteError(error.message));
   }, [inviteToken]);
@@ -251,12 +200,9 @@ function App() {
       setIsConnected(false);
 
       if (error.message === 'Unauthorized') {
-        localStorage.removeItem('collab-token');
-        setToken('');
-        setUser(null);
-        setBoards([]);
+        expireSession('انتهت الجلسة أو أنها غير صالحة. سجل الدخول من جديد.');
+        resetWorkspace();
         closeBoard(false);
-        setAuthError('انتهت الجلسة أو أنها غير صالحة. سجل الدخول من جديد.');
       }
     }
 
@@ -543,10 +489,6 @@ function App() {
     setAuthForm((currentForm) => ({ ...currentForm, [field]: value }));
   }
 
-  function getAuthHeaders() {
-    return { Authorization: `Bearer ${token}` };
-  }
-
   function moveCardInState(cardId, targetColumnId, targetPosition, updatedCard) {
     setColumns((currentColumns) => {
       let movedCard = updatedCard || null;
@@ -604,64 +546,9 @@ function App() {
     );
   }
 
-  async function loadBoards() {
-    setBoardsError('');
-    setIsLoadingBoards(true);
-
-    try {
-      const response = await fetch(`${apiUrl}/api/boards`, {
-        headers: getAuthHeaders()
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not load boards');
-      }
-
-      setBoards(data.boards);
-      loadWorkspaceOverview();
-    } catch (error) {
-      setBoardsError(error.message);
-    } finally {
-      setIsLoadingBoards(false);
-    }
-  }
-
-  async function loadWorkspaceOverview() {
-    try {
-      const [statsResponse, activityResponse] = await Promise.all([
-        fetch(`${apiUrl}/api/workspace/stats`, { headers: getAuthHeaders() }),
-        fetch(`${apiUrl}/api/workspace/activity`, { headers: getAuthHeaders() })
-      ]);
-      const [statsData, activityData] = await Promise.all([
-        statsResponse.json(),
-        activityResponse.json()
-      ]);
-
-      if (statsResponse.ok) {
-        setWorkspaceStats(statsData.stats || emptyWorkspaceStats);
-      }
-
-      if (activityResponse.ok) {
-        setWorkspaceActivity(activityData.activity || []);
-      }
-    } catch {
-      setWorkspaceStats(emptyWorkspaceStats);
-      setWorkspaceActivity([]);
-    }
-  }
-
   async function loadBoardMembers(boardId) {
     try {
-      const response = await fetch(`${apiUrl}/api/boards/${boardId}/members`, {
-        headers: getAuthHeaders()
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not load board members');
-      }
-
+      const data = await boardApi.getMembers(boardId, token);
       setBoardMembers(data.members);
     } catch (error) {
       setBoardError(error.message);
@@ -678,16 +565,7 @@ function App() {
     setRemovingMemberId(memberId);
 
     try {
-      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}/members/${memberId}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not remove member');
-      }
-
+      await boardApi.removeMember(selectedBoardId, memberId, token);
       setBoardMembers((currentMembers) => currentMembers.filter((member) => member.id !== memberId));
       setColumns((currentColumns) =>
         currentColumns.map((column) => ({
@@ -747,17 +625,7 @@ function App() {
     setUpdatingMemberRoleId(memberId);
 
     try {
-      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}/members/${memberId}`, {
-        method: 'PATCH',
-        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role })
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not update member role');
-      }
-
+      const data = await boardApi.updateMemberRole(selectedBoardId, memberId, role, token);
       setBoardMembers((currentMembers) =>
         currentMembers.map((member) => (member.id === data.member.id ? data.member : member))
       );
@@ -782,15 +650,7 @@ function App() {
     setIsLoadingBoard(true);
 
     try {
-      const response = await fetch(`${apiUrl}/api/boards/${boardId}`, {
-        headers: getAuthHeaders()
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not load board');
-      }
-
+      const data = await boardApi.get(boardId, token);
       setActiveBoard(data.board);
       setColumns(data.columns);
       loadBoardMembers(boardId);
@@ -858,45 +718,16 @@ function App() {
 
   async function handleAuthSubmit(event) {
     event.preventDefault();
-    setAuthError('');
-    setIsSubmittingAuth(true);
-
-    const endpoint = authMode === 'register' ? 'register' : 'login';
-    const body = authMode === 'register'
-      ? authForm
-      : { email: authForm.email, password: authForm.password };
 
     try {
-      const response = await fetch(`${apiUrl}/api/auth/${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      const data = await readJsonResponse(response);
-
-      if (!response.ok) {
-        const message = data.message === 'Email is already registered'
-          ? 'هذا البريد الإلكتروني مسجل مسبقاً. استخدم تسجيل الدخول أو بريداً آخر.'
-          : data.message || 'تعذر إكمال المصادقة.';
-        throw new Error(message);
-      }
-
-      localStorage.setItem('collab-token', data.token);
-      setToken(data.token);
-      setUser(data.user);
+      await submitAuth(authMode, authForm);
       setAuthForm({ name: '', email: '', password: '' });
-    } catch (error) {
-      setAuthError(error.message);
-    } finally {
-      setIsSubmittingAuth(false);
-    }
+    } catch {}
   }
 
   function handleLogout() {
-    localStorage.removeItem('collab-token');
-    setToken('');
-    setUser(null);
-    setBoards([]);
+    logout();
+    resetWorkspace();
     setBoardTitle('');
     closeBoard();
   }
@@ -913,17 +744,7 @@ function App() {
     setIsCreatingBoard(true);
 
     try {
-      const response = await fetch(`${apiUrl}/api/boards`, {
-        method: 'POST',
-        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title })
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not create board');
-      }
-
+      const data = await createBoard(title, token);
       setBoards((currentBoards) => [data.board, ...currentBoards]);
       loadWorkspaceOverview();
       setBoardTitle('');
@@ -945,16 +766,7 @@ function App() {
     setIsCreatingInvite(true);
 
     try {
-      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}/invites`, {
-        method: 'POST',
-        headers: getAuthHeaders()
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not create invite');
-      }
-
+      const data = await boardApi.createInvite(selectedBoardId, token);
       const nextInviteLink = `${window.location.origin}${window.location.pathname}?invite=${data.invite.token}`;
       setInviteLink(nextInviteLink);
       setInviteNotice('تم إنشاء رابط الدعوة. صالح لمدة 7 أيام.');
@@ -977,17 +789,7 @@ function App() {
     setIsSavingBoard(true);
 
     try {
-      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}`, {
-        method: 'PATCH',
-        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title })
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not update board');
-      }
-
+      const data = await boardApi.update(selectedBoardId, title, token);
       setActiveBoard(data.board);
       setBoards((currentBoards) =>
         currentBoards.map((board) => (board.id === data.board.id ? { ...board, ...data.board } : board))
@@ -1009,16 +811,7 @@ function App() {
     setIsDeletingBoard(true);
 
     try {
-      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not delete board');
-      }
-
+      await boardApi.remove(selectedBoardId, token);
       setBoards((currentBoards) => currentBoards.filter((board) => board.id !== selectedBoardId));
       loadWorkspaceOverview();
       closeBoard();
@@ -1041,17 +834,7 @@ function App() {
     setIsCreatingColumn(true);
 
     try {
-      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}/columns`, {
-        method: 'POST',
-        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title })
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not create column');
-      }
-
+      const data = await boardApi.createColumn(selectedBoardId, title, token);
       setColumns((currentColumns) =>
         currentColumns.some((column) => column.id === data.column.id)
           ? currentColumns
@@ -1078,17 +861,7 @@ function App() {
     setSavingColumnId(columnId);
 
     try {
-      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}/columns/${columnId}`, {
-        method: 'PATCH',
-        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title })
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not update column');
-      }
-
+      const data = await boardApi.updateColumn(selectedBoardId, columnId, title, token);
       setColumns((currentColumns) =>
         currentColumns.map((column) =>
           column.id === data.column.id ? { ...column, title: data.column.title } : column
@@ -1110,16 +883,7 @@ function App() {
     setDeletingColumnId(columnId);
 
     try {
-      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}/columns/${columnId}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not delete column');
-      }
-
+      await boardApi.removeColumn(selectedBoardId, columnId, token);
       setColumns((currentColumns) => currentColumns.filter((column) => column.id !== columnId));
       setColumnDrafts((currentDrafts) => {
         const nextDrafts = { ...currentDrafts };
@@ -1163,16 +927,7 @@ function App() {
     setIsAcceptingInvite(true);
 
     try {
-      const response = await fetch(`${apiUrl}/api/invites/${inviteToken}/accept`, {
-        method: 'POST',
-        headers: getAuthHeaders()
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not accept invite');
-      }
-
+      const data = await acceptInvite(inviteToken, token);
       setBoards((currentBoards) =>
         currentBoards.some((board) => board.id === data.board.id)
           ? currentBoards
@@ -1202,17 +957,7 @@ function App() {
     setIsCreatingCard(columnId);
 
     try {
-      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}/columns/${columnId}/cards`, {
-        method: 'POST',
-        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title })
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not create card');
-      }
-
+      const data = await boardApi.createCard(selectedBoardId, columnId, title, token);
       setColumns((currentColumns) =>
         currentColumns.map((column) => {
           if (column.id !== columnId || column.cards.some((card) => card.id === data.card.id)) {
@@ -1256,19 +1001,7 @@ function App() {
     moveCardInState(cardId, targetColumnId, targetPosition);
 
     try {
-      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}/cards/${cardId}/move`, {
-        method: 'PATCH',
-        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          columnId: targetColumnId,
-          position: targetPosition
-        })
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not move card');
-      }
+      await boardApi.moveCard(selectedBoardId, cardId, targetColumnId, targetPosition, token);
       loadWorkspaceOverview();
     } catch (error) {
       setBoardError(error.message);
@@ -1289,15 +1022,7 @@ function App() {
     setIsLoadingCardDetails(true);
 
     try {
-      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}/cards/${cardId}`, {
-        headers: getAuthHeaders()
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not load card');
-      }
-
+      const data = await boardApi.getCard(selectedBoardId, cardId, token);
       setSelectedCard(data.card);
       setCardDetailsForm({
         title: data.card.title,
@@ -1408,16 +1133,7 @@ function App() {
         tags: cardDetailsForm.tags,
         checklist: cardDetailsForm.checklist
       };
-      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}/cards/${selectedCardId}`, {
-        method: 'PATCH',
-        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not save card');
-      }
+      const data = await boardApi.updateCard(selectedBoardId, selectedCardId, payload, token);
 
       setSelectedCard(data.card);
       mergeCardInState(data.card);
@@ -1438,16 +1154,7 @@ function App() {
     setIsDeletingCard(true);
 
     try {
-      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}/cards/${selectedCardId}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not delete card');
-      }
-
+      await boardApi.removeCard(selectedBoardId, selectedCardId, token);
       removeCardFromState(selectedCardId);
       loadWorkspaceOverview();
       closeCard();
@@ -1470,17 +1177,7 @@ function App() {
     setIsAddingComment(true);
 
     try {
-      const response = await fetch(`${apiUrl}/api/boards/${selectedBoardId}/cards/${selectedCardId}/comments`, {
-        method: 'POST',
-        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body })
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Could not add comment');
-      }
-
+      const data = await boardApi.addComment(selectedBoardId, selectedCardId, body, token);
       setComments((currentComments) =>
         currentComments.some((comment) => comment.id === data.comment.id)
           ? currentComments
