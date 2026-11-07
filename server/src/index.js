@@ -238,6 +238,52 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
   res.json({ user: getPublicUser(req.user) });
 });
 
+app.get('/api/notifications', requireAuth, (req, res) => {
+  const notifications = db.prepare(`
+    SELECT
+      notifications.id,
+      notifications.user_id AS userId,
+      notifications.board_id AS boardId,
+      notifications.type,
+      notifications.entity_type AS entityType,
+      notifications.entity_id AS entityId,
+      notifications.message,
+      notifications.is_read AS isRead,
+      notifications.created_at AS createdAt,
+      users.name AS actorName,
+      boards.title AS boardTitle
+    FROM notifications
+    LEFT JOIN users ON users.id = notifications.actor_id
+    INNER JOIN boards ON boards.id = notifications.board_id
+    WHERE notifications.user_id = ?
+    ORDER BY notifications.created_at DESC, notifications.rowid DESC
+    LIMIT 50
+  `).all(req.user.id);
+  const unreadCount = notifications.filter((notification) => !notification.isRead).length;
+
+  res.json({ notifications, unreadCount });
+});
+
+app.patch('/api/notifications/read-all', requireAuth, (req, res) => {
+  db.prepare('UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0')
+    .run(req.user.id);
+  res.json({ ok: true });
+});
+
+app.patch('/api/notifications/:notificationId/read', requireAuth, (req, res) => {
+  const result = db.prepare(`
+    UPDATE notifications
+    SET is_read = 1
+    WHERE id = ? AND user_id = ?
+  `).run(req.params.notificationId, req.user.id);
+
+  if (result.changes === 0) {
+    return res.status(404).json({ message: 'Notification not found' });
+  }
+
+  res.json({ notificationId: req.params.notificationId });
+});
+
 function getBoardForUser(boardId, userId) {
   return db
     .prepare(`
@@ -282,6 +328,41 @@ function logActivity(boardId, userId, action, entityType, entityId, metadata = {
     INSERT INTO activity_logs (id, board_id, user_id, action, entity_type, entity_id, metadata)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(randomUUID(), boardId, userId, action, entityType, entityId, JSON.stringify(metadata));
+}
+
+function createNotification({ userId, boardId, actorId, type, entityType, entityId, message }) {
+  if (!userId || userId === actorId) {
+    return null;
+  }
+
+  const notificationId = randomUUID();
+  db.prepare(`
+    INSERT INTO notifications (
+      id, user_id, board_id, actor_id, type, entity_type, entity_id, message
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(notificationId, userId, boardId, actorId, type, entityType, entityId, message);
+
+  const notification = db.prepare(`
+    SELECT
+      notifications.id,
+      notifications.user_id AS userId,
+      notifications.board_id AS boardId,
+      notifications.type,
+      notifications.entity_type AS entityType,
+      notifications.entity_id AS entityId,
+      notifications.message,
+      notifications.is_read AS isRead,
+      notifications.created_at AS createdAt,
+      users.name AS actorName,
+      boards.title AS boardTitle
+    FROM notifications
+    LEFT JOIN users ON users.id = notifications.actor_id
+    INNER JOIN boards ON boards.id = notifications.board_id
+    WHERE notifications.id = ?
+  `).get(notificationId);
+
+  io.to(`user:${userId}`).emit('notification:created', { notification });
+  return notification;
 }
 
 function isCompletionColumnTitle(title) {
@@ -1415,6 +1496,15 @@ app.patch('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
     return res.status(403).json({ message: 'Members can only update the status of subtasks assigned to them' });
   }
 
+  const previousChecklistById = new Map(
+    (existingCard.checklist || []).map((item) => [item.id, item])
+  );
+  const newlyAssignedSubtasks = checklist.filter((item) => {
+    if (!item.assigneeId) return false;
+    return previousChecklistById.get(item.id)?.assigneeId !== item.assigneeId;
+  });
+  const cardManagerChanged = assigneeId && assigneeId !== (existingCard.assigneeId || null);
+
   db.prepare(`
     UPDATE cards
     SET
@@ -1431,6 +1521,30 @@ app.patch('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
   `).run(title, description, dueDate, assigneeId, priority, JSON.stringify(tags), JSON.stringify(checklist), existingCard.id);
   db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
   logActivity(board.id, req.user.id, 'updated', 'card', existingCard.id, { title, priority });
+
+  if (cardManagerChanged) {
+    createNotification({
+      userId: assigneeId,
+      boardId: board.id,
+      actorId: req.user.id,
+      type: 'card_assigned',
+      entityType: 'card',
+      entityId: existingCard.id,
+      message: `${req.user.name} أسند إليك مسؤولية البطاقة «${title}»`
+    });
+  }
+
+  newlyAssignedSubtasks.forEach((item) => {
+    createNotification({
+      userId: item.assigneeId,
+      boardId: board.id,
+      actorId: req.user.id,
+      type: 'subtask_assigned',
+      entityType: 'card',
+      entityId: existingCard.id,
+      message: `${req.user.name} أسند إليك المهمة «${item.text || 'مهمة فرعية'}» في بطاقة «${title}»`
+    });
+  });
 
   const card = getCardForBoard(existingCard.id, board.id);
   const activity = getActivityForCard(card.id, board.id);
@@ -1469,6 +1583,25 @@ app.post('/api/boards/:boardId/cards/:cardId/comments', requireAuth, (req, res) 
     .run(commentId, card.id, req.user.id, body);
   db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
   logActivity(board.id, req.user.id, 'commented', 'card', card.id, { title: card.title });
+
+  const commentRecipients = new Set([
+    card.assigneeId,
+    ...(card.checklist || []).map((item) => item.assigneeId)
+  ]);
+  commentRecipients.delete(null);
+  commentRecipients.delete('');
+  commentRecipients.delete(req.user.id);
+  commentRecipients.forEach((userId) => {
+    createNotification({
+      userId,
+      boardId: board.id,
+      actorId: req.user.id,
+      type: 'card_commented',
+      entityType: 'card',
+      entityId: card.id,
+      message: `${req.user.name} أضاف تعليقاً على البطاقة «${card.title}»`
+    });
+  });
 
   const comment = getCommentsForCard(card.id).find((item) => item.id === commentId);
   const activity = getActivityForCard(card.id, board.id);
@@ -1533,6 +1666,7 @@ app.delete('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
 
 io.on('connection', (socket) => {
   console.log(`Socket connected: ${socket.id}`);
+  socket.join(`user:${socket.data.user.id}`);
 
   socket.emit('server:welcome', {
     message: 'Connected to real-time server'

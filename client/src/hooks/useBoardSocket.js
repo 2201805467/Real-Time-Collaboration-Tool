@@ -15,7 +15,8 @@ const boardEvents = [
   'board:member-removed',
   'board:member-updated',
   'board:comment-created',
-  'board:access-revoked'
+  'board:access-revoked',
+  'notification:created'
 ];
 
 export default function useBoardSocket({

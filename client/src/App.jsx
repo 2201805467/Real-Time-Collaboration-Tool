@@ -12,6 +12,7 @@ import { acceptInvite, createBoard, getInvite } from './api/workspaceApi.js';
 import useAuthSession from './hooks/useAuthSession.js';
 import useActiveBoard from './hooks/useActiveBoard.js';
 import useBoardSocket from './hooks/useBoardSocket.js';
+import useNotifications from './hooks/useNotifications.js';
 import useWorkspaceData from './hooks/useWorkspaceData.js';
 
 const priorityLabels = {
@@ -78,6 +79,15 @@ function App() {
     loadWorkspaceOverview,
     resetWorkspace
   } = useWorkspaceData(token, user);
+  const {
+    notifications,
+    unreadNotificationsCount,
+    isLoadingNotifications,
+    notificationsError,
+    receiveNotification,
+    markNotificationRead,
+    markAllNotificationsRead
+  } = useNotifications(token, user);
   const [boardTitle, setBoardTitle] = useState('');
   const [isCreatingBoard, setIsCreatingBoard] = useState(false);
   const [inviteToken, setInviteToken] = useState(() => new URLSearchParams(window.location.search).get('invite') || '');
@@ -407,6 +417,10 @@ function App() {
       setBoardsError('تمت إزالة عضويتك من هذه اللوحة.');
     }
 
+    function handleNotificationCreated(payload) {
+      receiveNotification(payload.notification);
+    }
+
   const { isConnected, presenceUsers, setPresenceUsers } = useBoardSocket({
     token,
     user,
@@ -424,7 +438,8 @@ function App() {
       'board:member-removed': handleMemberRemoved,
       'board:member-updated': handleMemberUpdated,
       'board:comment-created': handleCommentCreated,
-      'board:access-revoked': handleAccessRevoked
+      'board:access-revoked': handleAccessRevoked,
+      'notification:created': handleNotificationCreated
     },
     onUnauthorized: handleUnauthorizedSocket,
     onJoinError: (message) => setBoardError(
@@ -434,6 +449,18 @@ function App() {
 
   function updateAuthForm(field, value) {
     setAuthForm((currentForm) => ({ ...currentForm, [field]: value }));
+  }
+
+  async function handleOpenNotification(notification) {
+    if (!notification) return;
+
+    if (!notification.isRead) {
+      await markNotificationRead(notification.id);
+    }
+
+    if (notification.entityType === 'card' && notification.boardId && notification.entityId) {
+      navigate(`/boards/${encodeURIComponent(notification.boardId)}/tasks/${encodeURIComponent(notification.entityId)}`);
+    }
   }
 
   async function loadBoardMembers(boardId) {
@@ -1213,8 +1240,14 @@ function App() {
           isConnected={isConnected}
           presenceUsers={presenceUsers}
           userIsBoardOwner={userIsBoardOwner}
+          notifications={notifications}
+          unreadNotificationsCount={unreadNotificationsCount}
+          isLoadingNotifications={isLoadingNotifications}
+          notificationsError={notificationsError}
           onBoardChange={(boardId) => (boardId ? openBoard(boardId) : closeBoard())}
           onNavigate={navigateToSection}
+          onOpenNotification={handleOpenNotification}
+          onMarkAllNotificationsRead={markAllNotificationsRead}
         />
       ) : null}
 

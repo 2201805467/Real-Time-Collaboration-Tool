@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Bell,
   ClipboardCheck,
   FolderKanban,
   KanbanSquare,
@@ -19,9 +20,44 @@ function WorkspaceChrome({
   isConnected,
   presenceUsers,
   userIsBoardOwner,
+  notifications,
+  unreadNotificationsCount,
+  isLoadingNotifications,
+  notificationsError,
   onBoardChange,
-  onNavigate
+  onNavigate,
+  onOpenNotification,
+  onMarkAllNotificationsRead
 }) {
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const notificationsMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!notificationsOpen) {
+      return undefined;
+    }
+
+    function handlePointerDown(event) {
+      if (!notificationsMenuRef.current?.contains(event.target)) {
+        setNotificationsOpen(false);
+      }
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        setNotificationsOpen(false);
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [notificationsOpen]);
+
   return (
     <>
       <aside className="workspace-sidebar" aria-label="Workspace navigation">
@@ -124,6 +160,50 @@ function WorkspaceChrome({
           <strong>{activeBoardTitle}</strong>
         </div>
         <div className="topbar-actions">
+          <div className="notifications-menu" ref={notificationsMenuRef}>
+            <button
+              type="button"
+              className="notification-bell"
+              onClick={() => setNotificationsOpen((open) => !open)}
+              aria-label="الإشعارات"
+              aria-expanded={notificationsOpen}
+            >
+              <Bell size={19} />
+              {unreadNotificationsCount ? <span>{unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}</span> : null}
+            </button>
+            {notificationsOpen ? (
+              <section className="notifications-popover" aria-label="قائمة الإشعارات">
+                <header>
+                  <div><strong>الإشعارات</strong><small>{unreadNotificationsCount} غير مقروء</small></div>
+                  <button type="button" onClick={onMarkAllNotificationsRead} disabled={!unreadNotificationsCount}>تحديد الكل كمقروء</button>
+                </header>
+                {notificationsError ? <p className="form-error">{notificationsError}</p> : null}
+                <div className="notifications-list">
+                  {isLoadingNotifications ? (
+                    <p className="empty-state">جاري تحميل الإشعارات...</p>
+                  ) : notifications.length === 0 ? (
+                    <p className="empty-state">لا توجد إشعارات بعد.</p>
+                  ) : notifications.map((notification) => (
+                    <button
+                      type="button"
+                      key={notification.id}
+                      className={notification.isRead ? 'notification-item' : 'notification-item unread'}
+                      onClick={() => {
+                        onOpenNotification(notification);
+                        setNotificationsOpen(false);
+                      }}
+                    >
+                      <span className="notification-avatar">{(notification.actorName || 'ن').slice(0, 1)}</span>
+                      <span>
+                        <strong>{notification.message}</strong>
+                        <small>{notification.boardTitle} · {new Date(notification.createdAt).toLocaleString('ar')}</small>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+          </div>
           <span className={isConnected ? 'live-pill online' : 'live-pill'}>مزامنة فورية</span>
           <div className="topbar-presence" title="الأعضاء المتصلون">
             <div className="topbar-avatars">

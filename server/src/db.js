@@ -106,12 +106,29 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
   );
 
+  CREATE TABLE IF NOT EXISTS notifications (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    board_id TEXT NOT NULL,
+    actor_id TEXT,
+    type TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    message TEXT NOT NULL,
+    is_read INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE,
+    FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL
+  );
+
   CREATE INDEX IF NOT EXISTS idx_boards_owner_id ON boards(owner_id);
   CREATE INDEX IF NOT EXISTS idx_board_invites_token ON board_invites(token);
   CREATE INDEX IF NOT EXISTS idx_board_columns_board_id ON board_columns(board_id);
   CREATE INDEX IF NOT EXISTS idx_cards_column_id ON cards(column_id);
   CREATE INDEX IF NOT EXISTS idx_comments_card_id ON comments(card_id);
   CREATE INDEX IF NOT EXISTS idx_activity_logs_board_id ON activity_logs(board_id);
+  CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id, is_read, created_at);
 `);
 
 function ensureColumn(tableName, columnName, definition) {

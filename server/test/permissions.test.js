@@ -228,6 +228,41 @@ test('owner, manager, and member permissions follow the project hierarchy', asyn
   });
   assert.equal(memberComment.status, 201);
 
+  const managerNotifications = await api('/api/notifications', { token: manager.token });
+  assert.equal(managerNotifications.status, 200);
+  assert.ok(managerNotifications.data.notifications.some((item) => item.type === 'card_assigned'));
+  assert.ok(managerNotifications.data.notifications.some((item) => item.type === 'card_commented'));
+  assert.equal(managerNotifications.data.unreadCount, 2);
+
+  const memberNotifications = await api('/api/notifications', { token: member.token });
+  assert.equal(memberNotifications.status, 200);
+  assert.equal(
+    memberNotifications.data.notifications.filter((item) => item.type === 'subtask_assigned').length,
+    2
+  );
+
+  const managerNotificationId = managerNotifications.data.notifications[0].id;
+  const memberCannotReadAnotherUsersNotification = await api(
+    `/api/notifications/${managerNotificationId}/read`,
+    { method: 'PATCH', token: member.token }
+  );
+  assert.equal(memberCannotReadAnotherUsersNotification.status, 404);
+
+  const managerReadsNotification = await api(`/api/notifications/${managerNotificationId}/read`, {
+    method: 'PATCH',
+    token: manager.token
+  });
+  assert.equal(managerReadsNotification.status, 200);
+
+  const managerReadsAll = await api('/api/notifications/read-all', {
+    method: 'PATCH',
+    token: manager.token
+  });
+  assert.equal(managerReadsAll.status, 200);
+
+  const readManagerNotifications = await api('/api/notifications', { token: manager.token });
+  assert.equal(readManagerNotifications.data.unreadCount, 0);
+
   const movedCard = await api(`/api/boards/${boardId}/cards/${cardId}/move`, {
     method: 'PATCH',
     token: owner.token,
