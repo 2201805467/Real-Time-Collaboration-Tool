@@ -4,7 +4,10 @@
   "scripts": {
     "dev": "concurrently \"npm.cmd --prefix server run dev\" \"npm.cmd --prefix client run dev\"",
     "dev:server": "npm.cmd --prefix server run dev",
-    "dev:client": "npm.cmd --prefix client run dev"
+    "dev:client": "npm.cmd --prefix client run dev",
+    "build": "npm --prefix client run build",
+    "start": "npm --prefix server start",
+    "test": "npm --prefix server test"
   },
   "workspaces": [
     "server",
@@ -12,5 +15,8 @@
   ],
   "devDependencies": {
     "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=22.5.0"
   }
 }

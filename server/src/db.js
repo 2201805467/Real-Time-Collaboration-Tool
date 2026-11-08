@@ -1,7 +1,7 @@
 import { mkdirSync } from 'fs';
 import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
-import { DatabaseSync } from 'node:sqlite';
+import { fileURLToPath, pathToFileURL } from 'url';
+import { createClient } from '@libsql/client';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dataDir = join(__dirname, '..', 'data');
@@ -10,9 +10,59 @@ export const storageDir = dirname(dbPath);
 
 mkdirSync(storageDir, { recursive: true });
 
-export const db = new DatabaseSync(dbPath);
+const databaseUrl = process.env.TURSO_DATABASE_URL || pathToFileURL(dbPath).href;
+const databaseAuthToken = process.env.TURSO_AUTH_TOKEN || undefined;
+const client = createClient({ url: databaseUrl, authToken: databaseAuthToken });
 
-db.exec(`
+function normalizeArgs(args) {
+  return args.map((value) => {
+    if (value === undefined) return null;
+    if (typeof value === 'boolean') return value ? 1 : 0;
+    if (value instanceof Date) return value.toISOString();
+    return value;
+  });
+}
+
+class PreparedStatement {
+  constructor(sql) {
+    this.sql = sql;
+  }
+
+  async all(...args) {
+    const result = await client.execute({ sql: this.sql, args: normalizeArgs(args) });
+    return result.rows;
+  }
+
+  async get(...args) {
+    const result = await client.execute({ sql: this.sql, args: normalizeArgs(args) });
+    return result.rows[0];
+  }
+
+  async run(...args) {
+    const result = await client.execute({ sql: this.sql, args: normalizeArgs(args) });
+    return {
+      changes: result.rowsAffected,
+      lastInsertRowid: result.lastInsertRowid
+    };
+  }
+}
+
+export const db = {
+  prepare(sql) {
+    return new PreparedStatement(sql);
+  },
+  exec(sql) {
+    return client.executeMultiple(sql);
+  },
+  async batch(statements) {
+    return client.batch(
+      statements.map(({ sql, args = [] }) => ({ sql, args: normalizeArgs(args) })),
+      'write'
+    );
+  }
+};
+
+await db.exec(`
   PRAGMA foreign_keys = ON;
 
   CREATE TABLE IF NOT EXISTS users (
@@ -161,34 +211,34 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id, is_read, created_at);
 `);
 
-function ensureColumn(tableName, columnName, definition) {
-  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all();
+async function ensureColumn(tableName, columnName, definition) {
+  const columns = await db.prepare(`PRAGMA table_info(${tableName})`).all();
   const hasColumn = columns.some((column) => column.name === columnName);
 
   if (!hasColumn) {
-    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+    await db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
   }
 }
 
-ensureColumn('cards', 'priority', "TEXT NOT NULL DEFAULT 'normal'");
-ensureColumn('cards', 'tags', "TEXT NOT NULL DEFAULT '[]'");
-ensureColumn('cards', 'checklist', "TEXT NOT NULL DEFAULT '[]'");
-ensureColumn('board_members', 'last_seen', 'TEXT');
-ensureColumn('users', 'notify_assignments', 'INTEGER NOT NULL DEFAULT 1');
-ensureColumn('users', 'notify_comments', 'INTEGER NOT NULL DEFAULT 1');
-ensureColumn('users', 'notify_due_dates', 'INTEGER NOT NULL DEFAULT 1');
-ensureColumn('users', 'avatar_url', 'TEXT');
-ensureColumn('comments', 'edited_at', 'TEXT');
-ensureColumn('notifications', 'dedupe_key', 'TEXT');
+await ensureColumn('cards', 'priority', "TEXT NOT NULL DEFAULT 'normal'");
+await ensureColumn('cards', 'tags', "TEXT NOT NULL DEFAULT '[]'");
+await ensureColumn('cards', 'checklist', "TEXT NOT NULL DEFAULT '[]'");
+await ensureColumn('board_members', 'last_seen', 'TEXT');
+await ensureColumn('users', 'notify_assignments', 'INTEGER NOT NULL DEFAULT 1');
+await ensureColumn('users', 'notify_comments', 'INTEGER NOT NULL DEFAULT 1');
+await ensureColumn('users', 'notify_due_dates', 'INTEGER NOT NULL DEFAULT 1');
+await ensureColumn('users', 'avatar_url', 'TEXT');
+await ensureColumn('comments', 'edited_at', 'TEXT');
+await ensureColumn('notifications', 'dedupe_key', 'TEXT');
 
-db.exec(`
+await db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedupe_key
   ON notifications(dedupe_key)
   WHERE dedupe_key IS NOT NULL;
 `);
 
-export function getDatabaseSummary() {
-  const tables = db
+export async function getDatabaseSummary() {
+  const tables = await db
     .prepare(`
       SELECT name
       FROM sqlite_master
@@ -199,7 +249,8 @@ export function getDatabaseSummary() {
     .all();
 
   return {
-    path: dbPath,
+    provider: process.env.TURSO_DATABASE_URL ? 'turso' : 'local',
+    path: process.env.TURSO_DATABASE_URL ? null : dbPath,
     tables: tables.map((table) => table.name)
   };
 }

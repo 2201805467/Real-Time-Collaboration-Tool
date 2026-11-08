@@ -3,14 +3,17 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { randomUUID } from 'crypto';
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'fs';
-import { basename, join } from 'path';
+import { basename, dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import { Server } from 'socket.io';
 import { db, getDatabaseSummary, storageDir } from './db.js';
 import { createToken, getPublicUser, hashPassword, requireAuth, verifyPassword, verifyToken } from './auth.js';
 
 const app = express();
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const port = process.env.PORT || 4000;
 const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+const clientDistDir = join(__dirname, '..', '..', 'client', 'dist');
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
@@ -19,6 +22,7 @@ const io = new Server(httpServer, {
   }
 });
 const boardPresence = new Map();
+const fileFeaturesEnabled = process.env.FILE_FEATURES_ENABLED === 'true';
 const uploadsDir = join(storageDir, 'uploads');
 const maxAttachmentSize = 5 * 1024 * 1024;
 const allowedAttachmentTypes = new Set([
@@ -36,7 +40,15 @@ mkdirSync(uploadsDir, { recursive: true });
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 
-io.use((socket, next) => {
+if (!fileFeaturesEnabled) {
+  app.use(
+    /^\/api\/boards\/[^/]+\/cards\/[^/]+\/(?:attachments(?:\/|$)|subtasks\/[^/]+\/attachments(?:\/|$))/,
+    requireAuth,
+    (req, res) => res.status(410).json({ message: 'File attachments are disabled in this demo' })
+  );
+}
+
+io.use(async (socket, next) => {
   const token = socket.handshake.auth?.token;
   const payload = verifyToken(token);
 
@@ -44,7 +56,7 @@ io.use((socket, next) => {
     return next(new Error('Unauthorized'));
   }
 
-  const user = db
+  const user = await db
     .prepare('SELECT id, name, email, avatar_url AS avatarUrl FROM users WHERE id = ?')
     .get(payload.sub);
 
@@ -94,8 +106,8 @@ function updateConnectedUser(user) {
   affectedBoards.forEach(emitPresence);
 }
 
-function emitPresence(boardId) {
-  const memberStatuses = db.prepare(`
+async function emitPresence(boardId) {
+  const memberStatuses = await db.prepare(`
     SELECT user_id AS userId, last_seen AS lastSeen
     FROM board_members
     WHERE board_id = ?
@@ -108,7 +120,7 @@ function emitPresence(boardId) {
   });
 }
 
-function removeSocketFromBoardPresence(boardId, socket) {
+async function removeSocketFromBoardPresence(boardId, socket) {
   const users = boardPresence.get(boardId);
   const userId = socket.data.user?.id;
   const presence = users?.get(userId);
@@ -121,7 +133,7 @@ function removeSocketFromBoardPresence(boardId, socket) {
 
   if (presence.socketIds.size === 0) {
     users.delete(userId);
-    db.prepare(`
+    await db.prepare(`
       UPDATE board_members
       SET last_seen = CURRENT_TIMESTAMP
       WHERE board_id = ? AND user_id = ?
@@ -132,18 +144,18 @@ function removeSocketFromBoardPresence(boardId, socket) {
     boardPresence.delete(boardId);
   }
 
-  emitPresence(boardId);
+  await emitPresence(boardId);
 }
 
-function removeSocketFromPresence(socket) {
+async function removeSocketFromPresence(socket) {
   const joinedBoards = socket.data.joinedBoards || new Set();
 
-  joinedBoards.forEach((boardId) => removeSocketFromBoardPresence(boardId, socket));
+  await Promise.all(Array.from(joinedBoards, (boardId) => removeSocketFromBoardPresence(boardId, socket)));
 
   socket.data.joinedBoards = new Set();
 }
 
-function revokeBoardAccess(boardId, userId) {
+async function revokeBoardAccess(boardId, userId) {
   const roomName = `board:${boardId}`;
   const users = boardPresence.get(boardId);
 
@@ -162,7 +174,7 @@ function revokeBoardAccess(boardId, userId) {
     boardPresence.delete(boardId);
   }
 
-  emitPresence(boardId);
+  await emitPresence(boardId);
 }
 
 function parseJsonList(value) {
@@ -238,8 +250,8 @@ function serializeCard(card) {
   };
 }
 
-function getAttachmentsForCard(cardId) {
-  return db.prepare(`
+async function getAttachmentsForCard(cardId) {
+  return await db.prepare(`
     SELECT
       attachments.id,
       attachments.card_id AS cardId,
@@ -257,10 +269,10 @@ function getAttachmentsForCard(cardId) {
   `).all(cardId);
 }
 
-function getSubtaskAttachments(cardId, subtaskId = null) {
+async function getSubtaskAttachments(cardId, subtaskId = null) {
   const whereSubtask = subtaskId ? 'AND subtask_attachments.subtask_id = ?' : '';
   const params = subtaskId ? [cardId, subtaskId] : [cardId];
-  return db.prepare(`
+  return await db.prepare(`
     SELECT
       subtask_attachments.id,
       subtask_attachments.card_id AS cardId,
@@ -298,11 +310,11 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-app.get('/api/db/summary', (req, res) => {
-  res.json(getDatabaseSummary());
+app.get('/api/db/summary', async (req, res) => {
+  res.json(await getDatabaseSummary());
 });
 
-app.post('/api/auth/register', (req, res) => {
+app.post('/api/auth/register', async (req, res) => {
   const name = String(req.body.name || '').trim();
   const email = String(req.body.email || '').trim().toLowerCase();
   const password = String(req.body.password || '');
@@ -321,12 +333,12 @@ app.post('/api/auth/register', (req, res) => {
   };
 
   try {
-    db.prepare('INSERT INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)')
+    await db.prepare('INSERT INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)')
       .run(user.id, user.name, user.email, user.passwordHash);
   } catch (error) {
     const isDuplicateEmail =
-      error.code === 'ERR_SQLITE_CONSTRAINT_UNIQUE' ||
-      (error.code === 'ERR_SQLITE_ERROR' && error.message?.includes('UNIQUE constraint failed: users.email'));
+      String(error.code || '').includes('SQLITE_CONSTRAINT') &&
+      error.message?.includes('users.email');
 
     if (isDuplicateEmail) {
       return res.status(409).json({ message: 'Email is already registered' });
@@ -343,10 +355,10 @@ app.post('/api/auth/register', (req, res) => {
   });
 });
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
   const password = String(req.body.password || '');
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(email);
 
   if (!user || !verifyPassword(password, user.password_hash)) {
     return res.status(401).json({ message: 'Invalid email or password' });
@@ -364,7 +376,7 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
   res.json({ user: getPublicUser(req.user) });
 });
 
-app.patch('/api/auth/profile', requireAuth, (req, res) => {
+app.patch('/api/auth/profile', requireAuth, async (req, res) => {
   const name = String(req.body.name || '').trim();
   const email = String(req.body.email || '').trim().toLowerCase();
 
@@ -373,7 +385,7 @@ app.patch('/api/auth/profile', requireAuth, (req, res) => {
   }
 
   try {
-    db.prepare(`
+    await db.prepare(`
       UPDATE users SET name = ?, email = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
     `).run(name, email, req.user.id);
   } catch (error) {
@@ -383,7 +395,7 @@ app.patch('/api/auth/profile', requireAuth, (req, res) => {
     throw error;
   }
 
-  const user = db.prepare(`
+  const user = await db.prepare(`
     SELECT id, name, email, avatar_url AS avatarUrl, created_at AS createdAt,
       notify_assignments AS notifyAssignments,
       notify_comments AS notifyComments,
@@ -395,7 +407,7 @@ app.patch('/api/auth/profile', requireAuth, (req, res) => {
   res.json({ user: publicUser, token: createToken(publicUser) });
 });
 
-app.patch('/api/auth/avatar', requireAuth, (req, res) => {
+app.patch('/api/auth/avatar', requireAuth, async (req, res) => {
   const avatarUrl = req.body.avatarUrl == null ? null : String(req.body.avatarUrl);
   const avatarPattern = /^data:image\/(?:jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/;
 
@@ -412,11 +424,11 @@ app.patch('/api/auth/avatar', requireAuth, (req, res) => {
     }
   }
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE users SET avatar_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
   `).run(avatarUrl, req.user.id);
 
-  const user = db.prepare(`
+  const user = await db.prepare(`
     SELECT id, name, email, avatar_url AS avatarUrl, created_at AS createdAt,
       notify_assignments AS notifyAssignments,
       notify_comments AS notifyComments,
@@ -428,10 +440,10 @@ app.patch('/api/auth/avatar', requireAuth, (req, res) => {
   res.json({ user: publicUser });
 });
 
-app.patch('/api/auth/password', requireAuth, (req, res) => {
+app.patch('/api/auth/password', requireAuth, async (req, res) => {
   const currentPassword = String(req.body.currentPassword || '');
   const newPassword = String(req.body.newPassword || '');
-  const user = db.prepare('SELECT password_hash AS passwordHash FROM users WHERE id = ?')
+  const user = await db.prepare('SELECT password_hash AS passwordHash FROM users WHERE id = ?')
     .get(req.user.id);
 
   if (!verifyPassword(currentPassword, user.passwordHash)) {
@@ -442,17 +454,17 @@ app.patch('/api/auth/password', requireAuth, (req, res) => {
     return res.status(400).json({ message: 'New password must contain at least 6 characters' });
   }
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
   `).run(hashPassword(newPassword), req.user.id);
   res.json({ ok: true });
 });
 
-app.patch('/api/auth/preferences', requireAuth, (req, res) => {
+app.patch('/api/auth/preferences', requireAuth, async (req, res) => {
   const assignments = req.body.assignments !== false;
   const comments = req.body.comments !== false;
   const dueDates = req.body.dueDates !== false;
-  db.prepare(`
+  await db.prepare(`
     UPDATE users
     SET notify_assignments = ?, notify_comments = ?, notify_due_dates = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
@@ -461,8 +473,8 @@ app.patch('/api/auth/preferences', requireAuth, (req, res) => {
   res.json({ notificationPreferences: { assignments, comments, dueDates } });
 });
 
-app.get('/api/notifications', requireAuth, (req, res) => {
-  const notifications = db.prepare(`
+app.get('/api/notifications', requireAuth, async (req, res) => {
+  const notifications = await db.prepare(`
     SELECT
       notifications.id,
       notifications.user_id AS userId,
@@ -488,14 +500,14 @@ app.get('/api/notifications', requireAuth, (req, res) => {
   res.json({ notifications, unreadCount });
 });
 
-app.patch('/api/notifications/read-all', requireAuth, (req, res) => {
-  db.prepare('UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0')
+app.patch('/api/notifications/read-all', requireAuth, async (req, res) => {
+  await db.prepare('UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0')
     .run(req.user.id);
   res.json({ ok: true });
 });
 
-app.patch('/api/notifications/:notificationId/read', requireAuth, (req, res) => {
-  const result = db.prepare(`
+app.patch('/api/notifications/:notificationId/read', requireAuth, async (req, res) => {
+  const result = await db.prepare(`
     UPDATE notifications
     SET is_read = 1
     WHERE id = ? AND user_id = ?
@@ -508,8 +520,8 @@ app.patch('/api/notifications/:notificationId/read', requireAuth, (req, res) => 
   res.json({ notificationId: req.params.notificationId });
 });
 
-function getBoardForUser(boardId, userId) {
-  return db
+async function getBoardForUser(boardId, userId) {
+  return await db
     .prepare(`
       SELECT
         boards.id,
@@ -547,19 +559,19 @@ function requireOwner(board, res) {
   return false;
 }
 
-function logActivity(boardId, userId, action, entityType, entityId, metadata = {}) {
-  db.prepare(`
+async function logActivity(boardId, userId, action, entityType, entityId, metadata = {}) {
+  await db.prepare(`
     INSERT INTO activity_logs (id, board_id, user_id, action, entity_type, entity_id, metadata)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(randomUUID(), boardId, userId, action, entityType, entityId, JSON.stringify(metadata));
 }
 
-function createNotification({ userId, boardId, actorId, type, entityType, entityId, message, dedupeKey = null }) {
+async function createNotification({ userId, boardId, actorId, type, entityType, entityId, message, dedupeKey = null }) {
   if (!userId || userId === actorId) {
     return null;
   }
 
-  const preferences = db.prepare(`
+  const preferences = await db.prepare(`
     SELECT notify_assignments AS assignments, notify_comments AS comments,
       notify_due_dates AS dueDates
     FROM users WHERE id = ?
@@ -573,18 +585,18 @@ function createNotification({ userId, boardId, actorId, type, entityType, entity
     return null;
   }
 
-  if (dedupeKey && db.prepare('SELECT 1 FROM notifications WHERE dedupe_key = ?').get(dedupeKey)) {
+  if (dedupeKey && await db.prepare('SELECT 1 FROM notifications WHERE dedupe_key = ?').get(dedupeKey)) {
     return null;
   }
 
   const notificationId = randomUUID();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO notifications (
       id, user_id, board_id, actor_id, type, entity_type, entity_id, message, dedupe_key
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(notificationId, userId, boardId, actorId, type, entityType, entityId, message, dedupeKey);
 
-  const notification = db.prepare(`
+  const notification = await db.prepare(`
     SELECT
       notifications.id,
       notifications.user_id AS userId,
@@ -621,8 +633,8 @@ function daysUntilDate(dateValue) {
   return Math.round((dueDate - todayUtc) / (24 * 60 * 60 * 1000));
 }
 
-function processDueDateNotifications() {
-  const cards = db.prepare(`
+async function processDueDateNotifications() {
+  const cards = await db.prepare(`
     SELECT cards.id, cards.title, cards.due_date AS dueDate, cards.assignee_id AS assigneeId,
       cards.checklist, boards.id AS boardId, boards.owner_id AS ownerId,
       board_columns.title AS columnTitle
@@ -632,10 +644,10 @@ function processDueDateNotifications() {
     WHERE cards.deleted_at IS NULL AND cards.due_date IS NOT NULL
   `).all();
 
-  cards.forEach((card) => {
-    if (isCompletionColumnTitle(card.columnTitle)) return;
+  for (const card of cards) {
+    if (isCompletionColumnTitle(card.columnTitle)) continue;
     const daysLeft = daysUntilDate(card.dueDate);
-    if (daysLeft === null || daysLeft > 2) return;
+    if (daysLeft === null || daysLeft > 2) continue;
 
     const type = daysLeft < 0 ? 'due_overdue' : daysLeft === 0 ? 'due_today' : 'due_soon';
     const message = daysLeft < 0
@@ -651,7 +663,7 @@ function processDueDateNotifications() {
     recipients.delete(null);
     recipients.delete('');
 
-    recipients.forEach((userId) => createNotification({
+    await Promise.all(Array.from(recipients, (userId) => createNotification({
       userId,
       boardId: card.boardId,
       actorId: null,
@@ -660,12 +672,12 @@ function processDueDateNotifications() {
       entityId: card.id,
       message,
       dedupeKey: `${type}:${card.id}:${userId}:${card.dueDate}`
-    }));
-  });
+    })));
+  }
 }
 
-function getWorkspaceStats(userId) {
-  const boards = db
+async function getWorkspaceStats(userId) {
+  const boards = await db
     .prepare(`
       SELECT boards.id, boards.title, board_members.role, boards.updated_at AS updatedAt
       FROM boards
@@ -686,7 +698,7 @@ function getWorkspaceStats(userId) {
   }
 
   const boardIds = new Set(boards.map((board) => board.id));
-  const cards = db
+  const cards = await db
     .prepare(`
       SELECT cards.id, cards.title, cards.due_date AS dueDate, cards.checklist,
         cards.updated_at AS updatedAt, board_columns.title AS columnTitle,
@@ -749,8 +761,8 @@ function getWorkspaceStats(userId) {
   };
 }
 
-function getCardForBoard(cardId, boardId) {
-  const card = db
+async function getCardForBoard(cardId, boardId) {
+  const card = await db
     .prepare(`
       SELECT
         cards.id,
@@ -782,8 +794,8 @@ function getCardForBoard(cardId, boardId) {
   return serializeCard(card);
 }
 
-function getBoardMembers(boardId) {
-  return db
+async function getBoardMembers(boardId) {
+  return await db
     .prepare(`
       SELECT
         users.id,
@@ -807,15 +819,15 @@ function getBoardMembers(boardId) {
     .all(boardId);
 }
 
-function getMentionedMembers(boardId, body, excludedUserId) {
+async function getMentionedMembers(boardId, body, excludedUserId) {
   const normalizedBody = String(body || '').toLocaleLowerCase();
-  return getBoardMembers(boardId).filter((member) => (
+  return (await getBoardMembers(boardId)).filter((member) => (
     member.id !== excludedUserId && normalizedBody.includes(`@${member.name.toLocaleLowerCase()}`)
   ));
 }
 
-function getCommentsForCard(cardId) {
-  return db
+async function getCommentsForCard(cardId) {
+  return await db
     .prepare(`
       SELECT
         comments.id,
@@ -835,8 +847,8 @@ function getCommentsForCard(cardId) {
     .all(cardId);
 }
 
-function getActivityForCard(cardId, boardId) {
-  return db
+async function getActivityForCard(cardId, boardId) {
+  return (await db
     .prepare(`
       SELECT
         activity_logs.id,
@@ -856,15 +868,15 @@ function getActivityForCard(cardId, boardId) {
       ORDER BY activity_logs.created_at DESC, activity_logs.rowid DESC
       LIMIT 50
     `)
-    .all(boardId, cardId)
+    .all(boardId, cardId))
     .map((activity) => ({
       ...activity,
       metadata: JSON.parse(activity.metadata || '{}')
     }));
 }
 
-function getBoardOverviewStats(boardId) {
-  const cards = db
+async function getBoardOverviewStats(boardId) {
+  const cards = await db
     .prepare(`
       SELECT cards.checklist, board_columns.title AS columnTitle
       FROM cards
@@ -873,7 +885,7 @@ function getBoardOverviewStats(boardId) {
         AND cards.deleted_at IS NULL
     `)
     .all(boardId);
-  const members = getBoardMembers(boardId);
+  const members = await getBoardMembers(boardId);
   const completedCards = cards.filter((card) => isCompletionColumnTitle(card.columnTitle)).length;
   const checklist = cards.flatMap((card) => parseJsonList(card.checklist));
   const completedSubtasks = checklist.filter((item) => item.status === 'done' || item.done).length;
@@ -897,8 +909,8 @@ function getBoardOverviewStats(boardId) {
   };
 }
 
-app.get('/api/boards', requireAuth, (req, res) => {
-  const boards = db
+app.get('/api/boards', requireAuth, async (req, res) => {
+  const boards = await Promise.all((await db
     .prepare(`
       SELECT
         boards.id,
@@ -911,21 +923,21 @@ app.get('/api/boards', requireAuth, (req, res) => {
       WHERE board_members.user_id = ?
       ORDER BY boards.updated_at DESC
     `)
-    .all(req.user.id)
-    .map((board) => ({
+    .all(req.user.id))
+    .map(async (board) => ({
       ...board,
-      stats: getBoardOverviewStats(board.id)
-    }));
+      stats: await getBoardOverviewStats(board.id)
+    })));
 
   res.json({ boards });
 });
 
-app.get('/api/workspace/stats', requireAuth, (req, res) => {
-  res.json({ stats: getWorkspaceStats(req.user.id) });
+app.get('/api/workspace/stats', requireAuth, async (req, res) => {
+  res.json({ stats: await getWorkspaceStats(req.user.id) });
 });
 
-app.get('/api/workspace/activity', requireAuth, (req, res) => {
-  const loggedActivity = db
+app.get('/api/workspace/activity', requireAuth, async (req, res) => {
+  const loggedActivity = (await db
     .prepare(`
       SELECT
         activity_logs.id,
@@ -945,14 +957,14 @@ app.get('/api/workspace/activity', requireAuth, (req, res) => {
       ORDER BY activity_logs.created_at DESC
       LIMIT 12
     `)
-    .all(req.user.id)
+    .all(req.user.id))
     .map((item) => ({ ...item, metadata: JSON.parse(item.metadata || '{}') }));
 
   if (loggedActivity.length > 0) {
     return res.json({ activity: loggedActivity });
   }
 
-  const fallbackActivity = db
+  const fallbackActivity = (await db
     .prepare(`
       SELECT
         comments.id,
@@ -974,13 +986,13 @@ app.get('/api/workspace/activity', requireAuth, (req, res) => {
       ORDER BY comments.created_at DESC
       LIMIT 12
     `)
-    .all(req.user.id)
+    .all(req.user.id))
     .map((item) => ({ ...item, metadata: { cardTitle: item.cardTitle } }));
 
   res.json({ activity: fallbackActivity });
 });
 
-app.post('/api/boards', requireAuth, (req, res) => {
+app.post('/api/boards', requireAuth, async (req, res) => {
   const title = String(req.body.title || '').trim();
 
   if (!title) {
@@ -993,35 +1005,26 @@ app.post('/api/boards', requireAuth, (req, res) => {
   };
   const defaultColumns = ['To Do', 'In Progress', 'Done'];
 
-  try {
-    db.exec('BEGIN');
-    db.prepare('INSERT INTO boards (id, owner_id, title) VALUES (?, ?, ?)')
-      .run(board.id, req.user.id, board.title);
-    db.prepare('INSERT INTO board_members (board_id, user_id, role) VALUES (?, ?, ?)')
-      .run(board.id, req.user.id, 'owner');
-    logActivity(board.id, req.user.id, 'created', 'board', board.id, { title: board.title });
+  await db.batch([
+    { sql: 'INSERT INTO boards (id, owner_id, title) VALUES (?, ?, ?)', args: [board.id, req.user.id, board.title] },
+    { sql: 'INSERT INTO board_members (board_id, user_id, role) VALUES (?, ?, ?)', args: [board.id, req.user.id, 'owner'] },
+    {
+      sql: 'INSERT INTO activity_logs (id, board_id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      args: [randomUUID(), board.id, req.user.id, 'created', 'board', board.id, JSON.stringify({ title: board.title })]
+    },
+    ...defaultColumns.map((columnTitle, index) => ({
+      sql: 'INSERT INTO board_columns (id, board_id, title, position) VALUES (?, ?, ?, ?)',
+      args: [randomUUID(), board.id, columnTitle, index]
+    }))
+  ]);
 
-    const insertColumn = db.prepare(
-      'INSERT INTO board_columns (id, board_id, title, position) VALUES (?, ?, ?, ?)'
-    );
-
-    defaultColumns.forEach((columnTitle, index) => {
-      insertColumn.run(randomUUID(), board.id, columnTitle, index);
-    });
-
-    db.exec('COMMIT');
-  } catch (error) {
-    db.exec('ROLLBACK');
-    throw error;
-  }
-
-  const createdBoard = getBoardForUser(board.id, req.user.id);
+  const createdBoard = await getBoardForUser(board.id, req.user.id);
 
   res.status(201).json({ board: createdBoard });
 });
 
-app.patch('/api/boards/:boardId', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
+app.patch('/api/boards/:boardId', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
 
   if (!board) {
     return res.status(404).json({ message: 'Board not found' });
@@ -1037,11 +1040,11 @@ app.patch('/api/boards/:boardId', requireAuth, (req, res) => {
     return res.status(400).json({ message: 'Board title is required' });
   }
 
-  db.prepare('UPDATE boards SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+  await db.prepare('UPDATE boards SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
     .run(title, board.id);
-  logActivity(board.id, req.user.id, 'updated', 'board', board.id, { title });
+  await logActivity(board.id, req.user.id, 'updated', 'board', board.id, { title });
 
-  const updatedBoard = getBoardForUser(board.id, req.user.id);
+  const updatedBoard = await getBoardForUser(board.id, req.user.id);
 
   io.to(`board:${board.id}`).emit('board:updated', {
     board: updatedBoard
@@ -1050,8 +1053,8 @@ app.patch('/api/boards/:boardId', requireAuth, (req, res) => {
   res.json({ board: updatedBoard });
 });
 
-app.delete('/api/boards/:boardId', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
+app.delete('/api/boards/:boardId', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
 
   if (!board) {
     return res.status(404).json({ message: 'Board not found' });
@@ -1061,7 +1064,7 @@ app.delete('/api/boards/:boardId', requireAuth, (req, res) => {
     return;
   }
 
-  const storedAttachments = db.prepare(`
+  const storedAttachments = await db.prepare(`
     SELECT attachments.stored_name AS storedName
     FROM attachments
     INNER JOIN cards ON cards.id = attachments.card_id
@@ -1074,7 +1077,7 @@ app.delete('/api/boards/:boardId', requireAuth, (req, res) => {
     INNER JOIN board_columns ON board_columns.id = cards.column_id
     WHERE board_columns.board_id = ?
   `).all(board.id, board.id);
-  db.prepare('DELETE FROM boards WHERE id = ?').run(board.id);
+  await db.prepare('DELETE FROM boards WHERE id = ?').run(board.id);
   deleteStoredAttachments(storedAttachments);
 
   io.to(`board:${board.id}`).emit('board:deleted', {
@@ -1084,8 +1087,8 @@ app.delete('/api/boards/:boardId', requireAuth, (req, res) => {
   res.json({ boardId: board.id });
 });
 
-app.post('/api/boards/:boardId/invites', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
+app.post('/api/boards/:boardId/invites', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
 
   if (!board) {
     return res.status(404).json({ message: 'Board not found' });
@@ -1099,7 +1102,7 @@ app.post('/api/boards/:boardId/invites', requireAuth, (req, res) => {
   const token = randomUUID().replaceAll('-', '');
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO board_invites (id, board_id, token, created_by, expires_at)
     VALUES (?, ?, ?, ?, ?)
   `).run(inviteId, board.id, token, req.user.id, expiresAt);
@@ -1114,8 +1117,8 @@ app.post('/api/boards/:boardId/invites', requireAuth, (req, res) => {
   });
 });
 
-app.get('/api/boards/:boardId/invites', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
+app.get('/api/boards/:boardId/invites', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
 
   if (!board) {
     return res.status(404).json({ message: 'Board not found' });
@@ -1125,7 +1128,7 @@ app.get('/api/boards/:boardId/invites', requireAuth, (req, res) => {
     return;
   }
 
-  const invites = db
+  const invites = await db
     .prepare(`
       SELECT
         id,
@@ -1143,8 +1146,8 @@ app.get('/api/boards/:boardId/invites', requireAuth, (req, res) => {
   return res.json({ invites });
 });
 
-app.delete('/api/boards/:boardId/invites/:inviteId', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
+app.delete('/api/boards/:boardId/invites/:inviteId', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
 
   if (!board) {
     return res.status(404).json({ message: 'Board not found' });
@@ -1154,7 +1157,7 @@ app.delete('/api/boards/:boardId/invites/:inviteId', requireAuth, (req, res) => 
     return;
   }
 
-  const result = db
+  const result = await db
     .prepare('DELETE FROM board_invites WHERE id = ? AND board_id = ?')
     .run(req.params.inviteId, board.id);
 
@@ -1165,8 +1168,8 @@ app.delete('/api/boards/:boardId/invites/:inviteId', requireAuth, (req, res) => 
   return res.json({ inviteId: req.params.inviteId });
 });
 
-app.get('/api/invites/:token', (req, res) => {
-  const invite = db
+app.get('/api/invites/:token', async (req, res) => {
+  const invite = await db
     .prepare(`
       SELECT
         board_invites.id,
@@ -1193,8 +1196,8 @@ app.get('/api/invites/:token', (req, res) => {
   res.json({ invite });
 });
 
-app.post('/api/invites/:token/accept', requireAuth, (req, res) => {
-  const invite = db
+app.post('/api/invites/:token/accept', requireAuth, async (req, res) => {
+  const invite = await db
     .prepare(`
       SELECT board_invites.board_id AS boardId, board_invites.expires_at AS expiresAt
       FROM board_invites
@@ -1210,25 +1213,25 @@ app.post('/api/invites/:token/accept', requireAuth, (req, res) => {
     return res.status(410).json({ message: 'Invite has expired' });
   }
 
-  db.prepare(`
+  await db.prepare(`
     INSERT OR IGNORE INTO board_members (board_id, user_id, role)
     VALUES (?, ?, ?)
   `).run(invite.boardId, req.user.id, 'member');
-  logActivity(invite.boardId, req.user.id, 'joined', 'board', invite.boardId);
+  await logActivity(invite.boardId, req.user.id, 'joined', 'board', invite.boardId);
 
-  const board = getBoardForUser(invite.boardId, req.user.id);
+  const board = await getBoardForUser(invite.boardId, req.user.id);
 
   res.json({ board });
 });
 
-app.get('/api/boards/:boardId', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
+app.get('/api/boards/:boardId', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
 
   if (!board) {
     return res.status(404).json({ message: 'Board not found' });
   }
 
-  const columns = db
+  const columns = await db
     .prepare(`
       SELECT id, title, position, created_at AS createdAt, updated_at AS updatedAt
       FROM board_columns
@@ -1237,7 +1240,7 @@ app.get('/api/boards/:boardId', requireAuth, (req, res) => {
     `)
     .all(board.id);
 
-  const cards = db
+  const cards = await db
     .prepare(`
       SELECT
         cards.id,
@@ -1278,18 +1281,18 @@ app.get('/api/boards/:boardId', requireAuth, (req, res) => {
   });
 });
 
-app.get('/api/boards/:boardId/members', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
+app.get('/api/boards/:boardId/members', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
 
   if (!board) {
     return res.status(404).json({ message: 'Board not found' });
   }
 
-  res.json({ members: getBoardMembers(board.id) });
+  res.json({ members: await getBoardMembers(board.id) });
 });
 
-app.patch('/api/boards/:boardId/members/:memberId', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
+app.patch('/api/boards/:boardId/members/:memberId', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
 
   if (!board) {
     return res.status(404).json({ message: 'Board not found' });
@@ -1310,7 +1313,7 @@ app.patch('/api/boards/:boardId/members/:memberId', requireAuth, (req, res) => {
     return res.status(400).json({ message: 'Role must be manager or member' });
   }
 
-  const member = db
+  const member = await db
     .prepare('SELECT user_id AS userId FROM board_members WHERE board_id = ? AND user_id = ?')
     .get(board.id, req.params.memberId);
 
@@ -1318,11 +1321,11 @@ app.patch('/api/boards/:boardId/members/:memberId', requireAuth, (req, res) => {
     return res.status(404).json({ message: 'Member not found' });
   }
 
-  db.prepare('UPDATE board_members SET role = ? WHERE board_id = ? AND user_id = ?')
+  await db.prepare('UPDATE board_members SET role = ? WHERE board_id = ? AND user_id = ?')
     .run(role, board.id, req.params.memberId);
 
   if (role === 'member') {
-    db.prepare(`
+    await db.prepare(`
       UPDATE cards
       SET assignee_id = NULL, updated_at = CURRENT_TIMESTAMP
       WHERE assignee_id = ?
@@ -1330,10 +1333,10 @@ app.patch('/api/boards/:boardId/members/:memberId', requireAuth, (req, res) => {
     `).run(req.params.memberId, board.id);
   }
 
-  db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
-  logActivity(board.id, req.user.id, 'updated_role', 'member', req.params.memberId, { role });
+  await db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+  await logActivity(board.id, req.user.id, 'updated_role', 'member', req.params.memberId, { role });
 
-  const updatedMember = getBoardMembers(board.id).find((item) => item.id === req.params.memberId);
+  const updatedMember = (await getBoardMembers(board.id)).find((item) => item.id === req.params.memberId);
 
   io.to(`board:${board.id}`).emit('board:member-updated', {
     boardId: board.id,
@@ -1343,8 +1346,8 @@ app.patch('/api/boards/:boardId/members/:memberId', requireAuth, (req, res) => {
   res.json({ member: updatedMember });
 });
 
-app.delete('/api/boards/:boardId/members/:memberId', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
+app.delete('/api/boards/:boardId/members/:memberId', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
 
   if (!board) {
     return res.status(404).json({ message: 'Board not found' });
@@ -1358,7 +1361,7 @@ app.delete('/api/boards/:boardId/members/:memberId', requireAuth, (req, res) => 
     return res.status(400).json({ message: 'The board owner cannot be removed' });
   }
 
-  const member = db
+  const member = await db
     .prepare('SELECT user_id AS userId FROM board_members WHERE board_id = ? AND user_id = ?')
     .get(board.id, req.params.memberId);
 
@@ -1366,12 +1369,12 @@ app.delete('/api/boards/:boardId/members/:memberId', requireAuth, (req, res) => 
     return res.status(404).json({ message: 'Member not found' });
   }
 
-  db.prepare('DELETE FROM board_members WHERE board_id = ? AND user_id = ?')
+  await db.prepare('DELETE FROM board_members WHERE board_id = ? AND user_id = ?')
     .run(board.id, req.params.memberId);
-  db.prepare('UPDATE cards SET assignee_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE assignee_id = ? AND column_id IN (SELECT id FROM board_columns WHERE board_id = ?)')
+  await db.prepare('UPDATE cards SET assignee_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE assignee_id = ? AND column_id IN (SELECT id FROM board_columns WHERE board_id = ?)')
     .run(req.params.memberId, board.id);
 
-  const cardsWithSubtasks = db
+  const cardsWithSubtasks = await db
     .prepare(`
       SELECT id, checklist
       FROM cards
@@ -1381,20 +1384,20 @@ app.delete('/api/boards/:boardId/members/:memberId', requireAuth, (req, res) => 
     .all(board.id);
   const updateChecklist = db.prepare('UPDATE cards SET checklist = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
 
-  cardsWithSubtasks.forEach((card) => {
+  await Promise.all(cardsWithSubtasks.map(async (card) => {
     const checklist = normalizeChecklist(parseJsonList(card.checklist));
     const nextChecklist = checklist.map((item) =>
       item.assigneeId === req.params.memberId ? { ...item, assigneeId: '' } : item
     );
 
     if (JSON.stringify(checklist) !== JSON.stringify(nextChecklist)) {
-      updateChecklist.run(JSON.stringify(nextChecklist), card.id);
+      await updateChecklist.run(JSON.stringify(nextChecklist), card.id);
     }
-  });
+  }));
 
-  db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+  await db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
 
-  revokeBoardAccess(board.id, req.params.memberId);
+  await revokeBoardAccess(board.id, req.params.memberId);
 
   io.to(`board:${board.id}`).emit('board:member-removed', {
     boardId: board.id,
@@ -1404,8 +1407,8 @@ app.delete('/api/boards/:boardId/members/:memberId', requireAuth, (req, res) => 
   res.json({ memberId: req.params.memberId });
 });
 
-app.post('/api/boards/:boardId/columns', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
+app.post('/api/boards/:boardId/columns', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
 
   if (!board) {
     return res.status(404).json({ message: 'Board not found' });
@@ -1422,16 +1425,16 @@ app.post('/api/boards/:boardId/columns', requireAuth, (req, res) => {
   }
 
   const position =
-    db
+    (await db
       .prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM board_columns WHERE board_id = ?')
-      .get(board.id).position || 0;
+      .get(board.id)).position || 0;
   const columnId = randomUUID();
 
-  db.prepare('INSERT INTO board_columns (id, board_id, title, position) VALUES (?, ?, ?, ?)')
+  await db.prepare('INSERT INTO board_columns (id, board_id, title, position) VALUES (?, ?, ?, ?)')
     .run(columnId, board.id, title, position);
-  db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+  await db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
 
-  const column = db
+  const column = await db
     .prepare(`
       SELECT id, title, position, created_at AS createdAt, updated_at AS updatedAt
       FROM board_columns
@@ -1448,8 +1451,8 @@ app.post('/api/boards/:boardId/columns', requireAuth, (req, res) => {
   res.status(201).json({ column: columnWithCards });
 });
 
-app.patch('/api/boards/:boardId/columns/:columnId', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
+app.patch('/api/boards/:boardId/columns/:columnId', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
 
   if (!board) {
     return res.status(404).json({ message: 'Board not found' });
@@ -1459,7 +1462,7 @@ app.patch('/api/boards/:boardId/columns/:columnId', requireAuth, (req, res) => {
     return;
   }
 
-  const column = db
+  const column = await db
     .prepare('SELECT id FROM board_columns WHERE id = ? AND board_id = ?')
     .get(req.params.columnId, board.id);
 
@@ -1473,11 +1476,11 @@ app.patch('/api/boards/:boardId/columns/:columnId', requireAuth, (req, res) => {
     return res.status(400).json({ message: 'Column title is required' });
   }
 
-  db.prepare('UPDATE board_columns SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+  await db.prepare('UPDATE board_columns SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
     .run(title, column.id);
-  db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+  await db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
 
-  const updatedColumn = db
+  const updatedColumn = await db
     .prepare(`
       SELECT id, title, position, created_at AS createdAt, updated_at AS updatedAt
       FROM board_columns
@@ -1493,8 +1496,8 @@ app.patch('/api/boards/:boardId/columns/:columnId', requireAuth, (req, res) => {
   res.json({ column: updatedColumn });
 });
 
-app.delete('/api/boards/:boardId/columns/:columnId', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
+app.delete('/api/boards/:boardId/columns/:columnId', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
 
   if (!board) {
     return res.status(404).json({ message: 'Board not found' });
@@ -1504,7 +1507,7 @@ app.delete('/api/boards/:boardId/columns/:columnId', requireAuth, (req, res) => 
     return;
   }
 
-  const column = db
+  const column = await db
     .prepare('SELECT id FROM board_columns WHERE id = ? AND board_id = ?')
     .get(req.params.columnId, board.id);
 
@@ -1512,16 +1515,14 @@ app.delete('/api/boards/:boardId/columns/:columnId', requireAuth, (req, res) => 
     return res.status(404).json({ message: 'Column not found' });
   }
 
-  db.prepare('DELETE FROM board_columns WHERE id = ?').run(column.id);
-  db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+  await db.prepare('DELETE FROM board_columns WHERE id = ?').run(column.id);
+  await db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
 
-  const remainingColumns = db
+  const remainingColumns = await db
     .prepare('SELECT id FROM board_columns WHERE board_id = ? ORDER BY position ASC')
     .all(board.id);
   const updatePosition = db.prepare('UPDATE board_columns SET position = ? WHERE id = ?');
-  remainingColumns.forEach((remainingColumn, index) => {
-    updatePosition.run(index, remainingColumn.id);
-  });
+  await Promise.all(remainingColumns.map((remainingColumn, index) => updatePosition.run(index, remainingColumn.id)));
 
   io.to(`board:${board.id}`).emit('board:column-deleted', {
     boardId: board.id,
@@ -1531,8 +1532,8 @@ app.delete('/api/boards/:boardId/columns/:columnId', requireAuth, (req, res) => 
   res.json({ columnId: column.id });
 });
 
-app.post('/api/boards/:boardId/columns/:columnId/cards', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
+app.post('/api/boards/:boardId/columns/:columnId/cards', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
 
   if (!board) {
     return res.status(404).json({ message: 'Board not found' });
@@ -1542,7 +1543,7 @@ app.post('/api/boards/:boardId/columns/:columnId/cards', requireAuth, (req, res)
     return;
   }
 
-  const column = db
+  const column = await db
     .prepare('SELECT id FROM board_columns WHERE id = ? AND board_id = ?')
     .get(req.params.columnId, board.id);
 
@@ -1557,17 +1558,17 @@ app.post('/api/boards/:boardId/columns/:columnId/cards', requireAuth, (req, res)
   }
 
   const nextPosition =
-    db
+    (await db
       .prepare('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM cards WHERE column_id = ?')
-      .get(column.id).position || 0;
+      .get(column.id)).position || 0;
   const cardId = randomUUID();
 
-  db.prepare('INSERT INTO cards (id, column_id, title, position) VALUES (?, ?, ?, ?)')
+  await db.prepare('INSERT INTO cards (id, column_id, title, position) VALUES (?, ?, ?, ?)')
     .run(cardId, column.id, title, nextPosition);
-  db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
-  logActivity(board.id, req.user.id, 'created', 'card', cardId, { title });
+  await db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+  await logActivity(board.id, req.user.id, 'created', 'card', cardId, { title });
 
-  const card = db
+  const card = await db
     .prepare(`
       SELECT
         cards.id,
@@ -1603,8 +1604,8 @@ app.post('/api/boards/:boardId/columns/:columnId/cards', requireAuth, (req, res)
   res.status(201).json({ card: serializedCard });
 });
 
-app.patch('/api/boards/:boardId/cards/:cardId/move', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
+app.patch('/api/boards/:boardId/cards/:cardId/move', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
 
   if (!board) {
     return res.status(404).json({ message: 'Board not found' });
@@ -1612,7 +1613,7 @@ app.patch('/api/boards/:boardId/cards/:cardId/move', requireAuth, (req, res) => 
 
   const targetColumnId = String(req.body.columnId || '');
   const requestedPosition = Number(req.body.position);
-  const targetColumn = db
+  const targetColumn = await db
     .prepare('SELECT id FROM board_columns WHERE id = ? AND board_id = ?')
     .get(targetColumnId, board.id);
 
@@ -1620,7 +1621,7 @@ app.patch('/api/boards/:boardId/cards/:cardId/move', requireAuth, (req, res) => 
     return res.status(400).json({ message: 'Valid target column and position are required' });
   }
 
-  const card = db
+  const card = await db
     .prepare(`
       SELECT cards.id, cards.column_id AS columnId, cards.assignee_id AS assigneeId
       FROM cards
@@ -1639,7 +1640,7 @@ app.patch('/api/boards/:boardId/cards/:cardId/move', requireAuth, (req, res) => 
     return res.status(403).json({ message: 'Only the owner or card manager can move this card' });
   }
 
-  const siblingCards = db
+  const siblingCards = await db
     .prepare(`
       SELECT id
       FROM cards
@@ -1654,49 +1655,38 @@ app.patch('/api/boards/:boardId/cards/:cardId/move', requireAuth, (req, res) => 
 
   orderedCardIds.splice(insertAt, 0, card.id);
 
-  try {
-    db.exec('BEGIN');
-    db.prepare(`
+  await db.prepare(`
       UPDATE cards
       SET column_id = ?, position = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(targetColumn.id, insertAt, card.id);
 
-    const updatePosition = db.prepare('UPDATE cards SET position = ? WHERE id = ?');
-    orderedCardIds.forEach((cardId, index) => {
-      updatePosition.run(index, cardId);
-    });
+  const updatePosition = db.prepare('UPDATE cards SET position = ? WHERE id = ?');
+  await Promise.all(orderedCardIds.map((cardId, index) => updatePosition.run(index, cardId)));
 
-    if (card.columnId !== targetColumn.id) {
-      const sourceCards = db
-        .prepare(`
+  if (card.columnId !== targetColumn.id) {
+    const sourceCards = await db
+      .prepare(`
           SELECT id
           FROM cards
           WHERE column_id = ?
             AND deleted_at IS NULL
           ORDER BY position ASC, created_at ASC
         `)
-        .all(card.columnId);
-      sourceCards.forEach((sourceCard, index) => {
-        updatePosition.run(index, sourceCard.id);
-      });
-    }
-
-    db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
-    const targetColumnTitle = db
-      .prepare('SELECT title FROM board_columns WHERE id = ?')
-      .get(targetColumn.id)?.title;
-    logActivity(board.id, req.user.id, 'moved', 'card', card.id, {
-      columnId: targetColumn.id,
-      columnTitle: targetColumnTitle
-    });
-    db.exec('COMMIT');
-  } catch (error) {
-    db.exec('ROLLBACK');
-    throw error;
+      .all(card.columnId);
+    await Promise.all(sourceCards.map((sourceCard, index) => updatePosition.run(index, sourceCard.id)));
   }
 
-  const movedCard = db
+  await db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+  const targetColumnTitle = (await db
+    .prepare('SELECT title FROM board_columns WHERE id = ?')
+    .get(targetColumn.id))?.title;
+  await logActivity(board.id, req.user.id, 'moved', 'card', card.id, {
+    columnId: targetColumn.id,
+    columnTitle: targetColumnTitle
+  });
+
+  const movedCard = await db
     .prepare(`
       SELECT
         cards.id,
@@ -1722,7 +1712,7 @@ app.patch('/api/boards/:boardId/cards/:cardId/move', requireAuth, (req, res) => 
     `)
     .get(card.id);
   const serializedMovedCard = serializeCard(movedCard);
-  const activity = getActivityForCard(card.id, board.id);
+  const activity = await getActivityForCard(card.id, board.id);
 
   io.to(`board:${board.id}`).emit('board:card-moved', {
     boardId: board.id,
@@ -1736,14 +1726,14 @@ app.patch('/api/boards/:boardId/cards/:cardId/move', requireAuth, (req, res) => 
   res.json({ card: serializedMovedCard, activity });
 });
 
-app.get('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
+app.get('/api/boards/:boardId/cards/:cardId', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
 
   if (!board) {
     return res.status(404).json({ message: 'Board not found' });
   }
 
-  const card = getCardForBoard(req.params.cardId, board.id);
+  const card = await getCardForBoard(req.params.cardId, board.id);
 
   if (!card) {
     return res.status(404).json({ message: 'Card not found' });
@@ -1751,15 +1741,15 @@ app.get('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
 
   res.json({
     card,
-    comments: getCommentsForCard(card.id),
-    activity: getActivityForCard(card.id, board.id),
-    attachments: getAttachmentsForCard(card.id),
-    subtaskAttachments: getSubtaskAttachments(card.id)
+    comments: await getCommentsForCard(card.id),
+    activity: await getActivityForCard(card.id, board.id),
+    attachments: await getAttachmentsForCard(card.id),
+    subtaskAttachments: await getSubtaskAttachments(card.id)
   });
 });
 
-app.get('/api/my-tasks', requireAuth, (req, res) => {
-  const cards = db.prepare(`
+app.get('/api/my-tasks', requireAuth, async (req, res) => {
+  const cards = await db.prepare(`
     SELECT
       cards.id AS cardId,
       cards.title AS cardTitle,
@@ -1787,8 +1777,8 @@ app.get('/api/my-tasks', requireAuth, (req, res) => {
   const assignedTasks = [];
   const reviewTasks = [];
 
-  cards.forEach((card) => {
-    const attachments = getSubtaskAttachments(card.cardId);
+  for (const card of cards) {
+    const attachments = await getSubtaskAttachments(card.cardId);
     normalizeChecklist(parseJsonList(card.checklist)).forEach((subtask) => {
       const task = {
         ...subtask,
@@ -1812,14 +1802,14 @@ app.get('/api/my-tasks', requireAuth, (req, res) => {
         reviewTasks.push(task);
       }
     });
-  });
+  }
 
   res.json({ assignedTasks, reviewTasks });
 });
 
-app.patch('/api/boards/:boardId/cards/:cardId/subtasks/:subtaskId/status', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
-  const card = board ? getCardForBoard(req.params.cardId, board.id) : null;
+app.patch('/api/boards/:boardId/cards/:cardId/subtasks/:subtaskId/status', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
+  const card = board ? await getCardForBoard(req.params.cardId, board.id) : null;
   const subtask = findSubtask(card, req.params.subtaskId);
 
   if (!board || !card || !subtask) return res.status(404).json({ message: 'Subtask not found' });
@@ -1853,9 +1843,9 @@ app.patch('/api/boards/:boardId/cards/:cardId/subtasks/:subtaskId/status', requi
     reviewedBy: reviewerStatuses.has(requestedStatus) ? req.user.id : null
   } : item);
 
-  db.prepare(`UPDATE cards SET checklist = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+  await db.prepare(`UPDATE cards SET checklist = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
     .run(JSON.stringify(nextChecklist), card.id);
-  db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+  await db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
 
   const action = requestedStatus === 'review'
     ? 'subtask_submitted'
@@ -1864,7 +1854,7 @@ app.patch('/api/boards/:boardId/cards/:cardId/subtasks/:subtaskId/status', requi
       : requestedStatus === 'changes_requested'
         ? 'subtask_changes_requested'
         : 'subtask_status_updated';
-  logActivity(board.id, req.user.id, action, 'card', card.id, {
+  await logActivity(board.id, req.user.id, action, 'card', card.id, {
     subtaskId: subtask.id,
     subtaskTitle: subtask.text,
     status: requestedStatus,
@@ -1872,7 +1862,7 @@ app.patch('/api/boards/:boardId/cards/:cardId/subtasks/:subtaskId/status', requi
   });
 
   if (requestedStatus === 'review') {
-    new Set([card.assigneeId, board.ownerId]).forEach((userId) => createNotification({
+    await Promise.all(Array.from(new Set([card.assigneeId, board.ownerId]), (userId) => createNotification({
       userId,
       boardId: board.id,
       actorId: req.user.id,
@@ -1880,9 +1870,9 @@ app.patch('/api/boards/:boardId/cards/:cardId/subtasks/:subtaskId/status', requi
       entityType: 'card',
       entityId: card.id,
       message: `${req.user.name} أرسل المهمة «${subtask.text}» للمراجعة في البطاقة «${card.title}»`
-    }));
+    })));
   } else if (reviewerStatuses.has(requestedStatus)) {
-    createNotification({
+    await createNotification({
       userId: subtask.assigneeId,
       boardId: board.id,
       actorId: req.user.id,
@@ -1895,20 +1885,20 @@ app.patch('/api/boards/:boardId/cards/:cardId/subtasks/:subtaskId/status', requi
     });
   }
 
-  const updatedCard = getCardForBoard(card.id, board.id);
+  const updatedCard = await getCardForBoard(card.id, board.id);
   const updatedTask = findSubtask(updatedCard, subtask.id);
-  const activity = getActivityForCard(card.id, board.id);
+  const activity = await getActivityForCard(card.id, board.id);
   io.to(`board:${board.id}`).emit('board:card-updated', { boardId: board.id, card: updatedCard, activity: activity[0] });
-  res.json({ task: { ...updatedTask, attachments: getSubtaskAttachments(card.id, subtask.id) }, card: updatedCard, activity: activity[0] });
+  res.json({ task: { ...updatedTask, attachments: await getSubtaskAttachments(card.id, subtask.id) }, card: updatedCard, activity: activity[0] });
 });
 
 app.post(
   '/api/boards/:boardId/cards/:cardId/subtasks/:subtaskId/attachments',
   requireAuth,
   express.raw({ type: 'application/octet-stream', limit: '5mb' }),
-  (req, res) => {
-    const board = getBoardForUser(req.params.boardId, req.user.id);
-    const card = board ? getCardForBoard(req.params.cardId, board.id) : null;
+  async (req, res) => {
+    const board = await getBoardForUser(req.params.boardId, req.user.id);
+    const card = board ? await getCardForBoard(req.params.cardId, board.id) : null;
     const subtask = findSubtask(card, req.params.subtaskId);
     if (!board || !card || !subtask) return res.status(404).json({ message: 'Subtask not found' });
 
@@ -1937,7 +1927,7 @@ app.post(
     const filePath = join(uploadsDir, storedName);
     writeFileSync(filePath, req.body, { flag: 'wx' });
     try {
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO subtask_attachments (id, card_id, subtask_id, user_id, original_name, stored_name, mime_type, size)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).run(attachmentId, card.id, subtask.id, req.user.id, originalName, storedName, mimeType, req.body.length);
@@ -1946,25 +1936,25 @@ app.post(
       throw error;
     }
 
-    logActivity(board.id, req.user.id, 'subtask_attachment_added', 'card', card.id, {
+    await logActivity(board.id, req.user.id, 'subtask_attachment_added', 'card', card.id, {
       subtaskId: subtask.id,
       subtaskTitle: subtask.text,
       fileName: originalName
     });
-    const attachment = getSubtaskAttachments(card.id, subtask.id).find((item) => item.id === attachmentId);
-    const activity = getActivityForCard(card.id, board.id);
+    const attachment = (await getSubtaskAttachments(card.id, subtask.id)).find((item) => item.id === attachmentId);
+    const activity = await getActivityForCard(card.id, board.id);
     io.to(`board:${board.id}`).emit('board:subtask-updated', { boardId: board.id, cardId: card.id, subtaskId: subtask.id, activity: activity[0] });
     res.status(201).json({ attachment, activity: activity[0] });
   }
 );
 
-app.get('/api/boards/:boardId/cards/:cardId/subtasks/:subtaskId/attachments/:attachmentId/download', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
-  const card = board ? getCardForBoard(req.params.cardId, board.id) : null;
+app.get('/api/boards/:boardId/cards/:cardId/subtasks/:subtaskId/attachments/:attachmentId/download', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
+  const card = board ? await getCardForBoard(req.params.cardId, board.id) : null;
   const subtask = findSubtask(card, req.params.subtaskId);
   if (!board || !card || !subtask) return res.status(404).json({ message: 'Subtask not found' });
 
-  const attachment = db.prepare(`
+  const attachment = await db.prepare(`
     SELECT original_name AS name, stored_name AS storedName, mime_type AS mimeType
     FROM subtask_attachments WHERE id = ? AND card_id = ? AND subtask_id = ?
   `).get(req.params.attachmentId, card.id, subtask.id);
@@ -1973,13 +1963,13 @@ app.get('/api/boards/:boardId/cards/:cardId/subtasks/:subtaskId/attachments/:att
   return res.download(join(uploadsDir, attachment.storedName), attachment.name);
 });
 
-app.delete('/api/boards/:boardId/cards/:cardId/subtasks/:subtaskId/attachments/:attachmentId', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
-  const card = board ? getCardForBoard(req.params.cardId, board.id) : null;
+app.delete('/api/boards/:boardId/cards/:cardId/subtasks/:subtaskId/attachments/:attachmentId', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
+  const card = board ? await getCardForBoard(req.params.cardId, board.id) : null;
   const subtask = findSubtask(card, req.params.subtaskId);
   if (!board || !card || !subtask) return res.status(404).json({ message: 'Subtask not found' });
 
-  const attachment = db.prepare(`
+  const attachment = await db.prepare(`
     SELECT id, user_id AS uploadedBy, original_name AS name, stored_name AS storedName
     FROM subtask_attachments WHERE id = ? AND card_id = ? AND subtask_id = ?
   `).get(req.params.attachmentId, card.id, subtask.id);
@@ -1989,15 +1979,15 @@ app.delete('/api/boards/:boardId/cards/:cardId/subtasks/:subtaskId/attachments/:
   const canDeleteOwn = attachment.uploadedBy === req.user.id && subtask.assigneeId === req.user.id && !['review', 'done'].includes(subtask.status);
   if (!isReviewer && !canDeleteOwn) return res.status(403).json({ message: 'You cannot delete this deliverable' });
 
-  db.prepare('DELETE FROM subtask_attachments WHERE id = ?').run(attachment.id);
+  await db.prepare('DELETE FROM subtask_attachments WHERE id = ?').run(attachment.id);
   const filePath = join(uploadsDir, attachment.storedName);
   if (existsSync(filePath)) unlinkSync(filePath);
-  logActivity(board.id, req.user.id, 'subtask_attachment_deleted', 'card', card.id, {
+  await logActivity(board.id, req.user.id, 'subtask_attachment_deleted', 'card', card.id, {
     subtaskId: subtask.id,
     subtaskTitle: subtask.text,
     fileName: attachment.name
   });
-  const activity = getActivityForCard(card.id, board.id);
+  const activity = await getActivityForCard(card.id, board.id);
   io.to(`board:${board.id}`).emit('board:subtask-updated', {
     boardId: board.id,
     cardId: card.id,
@@ -2011,9 +2001,9 @@ app.post(
   '/api/boards/:boardId/cards/:cardId/attachments',
   requireAuth,
   express.raw({ type: 'application/octet-stream', limit: '5mb' }),
-  (req, res) => {
-    const board = getBoardForUser(req.params.boardId, req.user.id);
-    const card = board ? getCardForBoard(req.params.cardId, board.id) : null;
+  async (req, res) => {
+    const board = await getBoardForUser(req.params.boardId, req.user.id);
+    const card = board ? await getCardForBoard(req.params.cardId, board.id) : null;
 
     if (!board || !card) {
       return res.status(404).json({ message: 'Card not found' });
@@ -2054,7 +2044,7 @@ app.post(
 
     writeFileSync(filePath, req.body, { flag: 'wx' });
     try {
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO attachments (id, card_id, user_id, original_name, stored_name, mime_type, size)
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `).run(attachmentId, card.id, req.user.id, originalName, storedName, mimeType, req.body.length);
@@ -2063,13 +2053,13 @@ app.post(
       throw error;
     }
 
-    logActivity(board.id, req.user.id, 'attachment_added', 'card', card.id, {
+    await logActivity(board.id, req.user.id, 'attachment_added', 'card', card.id, {
       attachmentId,
       fileName: originalName
     });
-    const attachment = getAttachmentsForCard(card.id).find((item) => item.id === attachmentId);
-    const attachmentCount = db.prepare('SELECT COUNT(*) AS count FROM attachments WHERE card_id = ?').get(card.id).count;
-    const activity = getActivityForCard(card.id, board.id);
+    const attachment = (await getAttachmentsForCard(card.id)).find((item) => item.id === attachmentId);
+    const attachmentCount = (await db.prepare('SELECT COUNT(*) AS count FROM attachments WHERE card_id = ?').get(card.id)).count;
+    const activity = await getActivityForCard(card.id, board.id);
 
     io.to(`board:${board.id}`).emit('board:attachment-created', {
       boardId: board.id,
@@ -2082,15 +2072,15 @@ app.post(
   }
 );
 
-app.get('/api/boards/:boardId/cards/:cardId/attachments/:attachmentId/download', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
-  const card = board ? getCardForBoard(req.params.cardId, board.id) : null;
+app.get('/api/boards/:boardId/cards/:cardId/attachments/:attachmentId/download', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
+  const card = board ? await getCardForBoard(req.params.cardId, board.id) : null;
 
   if (!board || !card) {
     return res.status(404).json({ message: 'Card not found' });
   }
 
-  const attachment = db.prepare(`
+  const attachment = await db.prepare(`
     SELECT original_name AS name, stored_name AS storedName, mime_type AS mimeType
     FROM attachments WHERE id = ? AND card_id = ?
   `).get(req.params.attachmentId, card.id);
@@ -2103,9 +2093,9 @@ app.get('/api/boards/:boardId/cards/:cardId/attachments/:attachmentId/download',
   return res.download(join(uploadsDir, attachment.storedName), attachment.name);
 });
 
-app.delete('/api/boards/:boardId/cards/:cardId/attachments/:attachmentId', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
-  const card = board ? getCardForBoard(req.params.cardId, board.id) : null;
+app.delete('/api/boards/:boardId/cards/:cardId/attachments/:attachmentId', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
+  const card = board ? await getCardForBoard(req.params.cardId, board.id) : null;
 
   if (!board || !card) {
     return res.status(404).json({ message: 'Card not found' });
@@ -2115,7 +2105,7 @@ app.delete('/api/boards/:boardId/cards/:cardId/attachments/:attachmentId', requi
     return res.status(403).json({ message: 'Only the owner or assigned manager can delete attachments' });
   }
 
-  const attachment = db.prepare(`
+  const attachment = await db.prepare(`
     SELECT id, original_name AS name, stored_name AS storedName
     FROM attachments WHERE id = ? AND card_id = ?
   `).get(req.params.attachmentId, card.id);
@@ -2124,16 +2114,16 @@ app.delete('/api/boards/:boardId/cards/:cardId/attachments/:attachmentId', requi
     return res.status(404).json({ message: 'Attachment not found' });
   }
 
-  db.prepare('DELETE FROM attachments WHERE id = ?').run(attachment.id);
+  await db.prepare('DELETE FROM attachments WHERE id = ?').run(attachment.id);
   const filePath = join(uploadsDir, attachment.storedName);
   if (existsSync(filePath)) unlinkSync(filePath);
 
-  logActivity(board.id, req.user.id, 'attachment_deleted', 'card', card.id, {
+  await logActivity(board.id, req.user.id, 'attachment_deleted', 'card', card.id, {
     attachmentId: attachment.id,
     fileName: attachment.name
   });
-  const attachmentCount = db.prepare('SELECT COUNT(*) AS count FROM attachments WHERE card_id = ?').get(card.id).count;
-  const activity = getActivityForCard(card.id, board.id);
+  const attachmentCount = (await db.prepare('SELECT COUNT(*) AS count FROM attachments WHERE card_id = ?').get(card.id)).count;
+  const activity = await getActivityForCard(card.id, board.id);
 
   io.to(`board:${board.id}`).emit('board:attachment-deleted', {
     boardId: board.id,
@@ -2145,14 +2135,14 @@ app.delete('/api/boards/:boardId/cards/:cardId/attachments/:attachmentId', requi
   res.json({ attachmentId: attachment.id, attachmentCount, activity });
 });
 
-app.patch('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
+app.patch('/api/boards/:boardId/cards/:cardId', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
 
   if (!board) {
     return res.status(404).json({ message: 'Board not found' });
   }
 
-  const existingCard = getCardForBoard(req.params.cardId, board.id);
+  const existingCard = await getCardForBoard(req.params.cardId, board.id);
 
   if (!existingCard) {
     return res.status(404).json({ message: 'Card not found' });
@@ -2177,7 +2167,7 @@ app.patch('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
   }
 
   if (assigneeId) {
-    const assignee = db
+    const assignee = await db
       .prepare('SELECT user_id AS userId, role FROM board_members WHERE board_id = ? AND user_id = ?')
       .get(board.id, assigneeId);
 
@@ -2190,7 +2180,7 @@ app.patch('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
     }
   }
 
-  const memberIds = new Set(getBoardMembers(board.id).map((member) => member.id));
+  const memberIds = new Set((await getBoardMembers(board.id)).map((member) => member.id));
   const hasInvalidSubtaskAssignee = checklist.some((item) => item.assigneeId && !memberIds.has(item.assigneeId));
 
   if (hasInvalidSubtaskAssignee) {
@@ -2246,16 +2236,16 @@ app.patch('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
 
   if (removedSubtaskIds.length) {
     const placeholders = removedSubtaskIds.map(() => '?').join(',');
-    const removedAttachments = db.prepare(`
+    const removedAttachments = await db.prepare(`
       SELECT stored_name AS storedName FROM subtask_attachments
       WHERE card_id = ? AND subtask_id IN (${placeholders})
     `).all(existingCard.id, ...removedSubtaskIds);
-    db.prepare(`DELETE FROM subtask_attachments WHERE card_id = ? AND subtask_id IN (${placeholders})`)
+    await db.prepare(`DELETE FROM subtask_attachments WHERE card_id = ? AND subtask_id IN (${placeholders})`)
       .run(existingCard.id, ...removedSubtaskIds);
     deleteStoredAttachments(removedAttachments);
   }
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE cards
     SET
       title = ?,
@@ -2269,11 +2259,11 @@ app.patch('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
       updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(title, description, dueDate, assigneeId, priority, JSON.stringify(tags), JSON.stringify(checklist), existingCard.id);
-  db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
-  logActivity(board.id, req.user.id, 'updated', 'card', existingCard.id, { title, priority, changedFields });
+  await db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+  await logActivity(board.id, req.user.id, 'updated', 'card', existingCard.id, { title, priority, changedFields });
 
   if (cardManagerChanged) {
-    createNotification({
+    await createNotification({
       userId: assigneeId,
       boardId: board.id,
       actorId: req.user.id,
@@ -2284,8 +2274,7 @@ app.patch('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
     });
   }
 
-  newlyAssignedSubtasks.forEach((item) => {
-    createNotification({
+  await Promise.all(newlyAssignedSubtasks.map((item) => createNotification({
       userId: item.assigneeId,
       boardId: board.id,
       actorId: req.user.id,
@@ -2293,13 +2282,12 @@ app.patch('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
       entityType: 'card',
       entityId: existingCard.id,
       message: `${req.user.name} أسند إليك المهمة «${item.text || 'مهمة فرعية'}» في بطاقة «${title}»`
-    });
-  });
+    })));
 
-  processDueDateNotifications();
+  await processDueDateNotifications();
 
-  const card = getCardForBoard(existingCard.id, board.id);
-  const activity = getActivityForCard(card.id, board.id);
+  const card = await getCardForBoard(existingCard.id, board.id);
+  const activity = await getActivityForCard(card.id, board.id);
 
   io.to(`board:${board.id}`).emit('board:card-updated', {
     boardId: board.id,
@@ -2310,14 +2298,14 @@ app.patch('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
   res.json({ card, activity });
 });
 
-app.post('/api/boards/:boardId/cards/:cardId/comments', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
+app.post('/api/boards/:boardId/cards/:cardId/comments', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
 
   if (!board) {
     return res.status(404).json({ message: 'Board not found' });
   }
 
-  const card = getCardForBoard(req.params.cardId, board.id);
+  const card = await getCardForBoard(req.params.cardId, board.id);
 
   if (!card) {
     return res.status(404).json({ message: 'Card not found' });
@@ -2335,12 +2323,12 @@ app.post('/api/boards/:boardId/cards/:cardId/comments', requireAuth, (req, res) 
 
   const commentId = randomUUID();
 
-  db.prepare('INSERT INTO comments (id, card_id, user_id, body) VALUES (?, ?, ?, ?)')
+  await db.prepare('INSERT INTO comments (id, card_id, user_id, body) VALUES (?, ?, ?, ?)')
     .run(commentId, card.id, req.user.id, body);
-  db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
-  logActivity(board.id, req.user.id, 'commented', 'card', card.id, { title: card.title });
+  await db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+  await logActivity(board.id, req.user.id, 'commented', 'card', card.id, { title: card.title });
 
-  const mentionedMembers = getMentionedMembers(board.id, body, req.user.id);
+  const mentionedMembers = await getMentionedMembers(board.id, body, req.user.id);
   const mentionedMemberIds = new Set(mentionedMembers.map((member) => member.id));
   const commentRecipients = new Set([
     card.assigneeId,
@@ -2350,8 +2338,7 @@ app.post('/api/boards/:boardId/cards/:cardId/comments', requireAuth, (req, res) 
   commentRecipients.delete('');
   commentRecipients.delete(req.user.id);
   mentionedMemberIds.forEach((userId) => commentRecipients.delete(userId));
-  commentRecipients.forEach((userId) => {
-    createNotification({
+  await Promise.all(Array.from(commentRecipients, (userId) => createNotification({
       userId,
       boardId: board.id,
       actorId: req.user.id,
@@ -2359,11 +2346,9 @@ app.post('/api/boards/:boardId/cards/:cardId/comments', requireAuth, (req, res) 
       entityType: 'card',
       entityId: card.id,
       message: `${req.user.name} أضاف تعليقاً على البطاقة «${card.title}»`
-    });
-  });
+    })));
 
-  mentionedMembers.forEach((member) => {
-    createNotification({
+  await Promise.all(mentionedMembers.map((member) => createNotification({
       userId: member.id,
       boardId: board.id,
       actorId: req.user.id,
@@ -2371,12 +2356,11 @@ app.post('/api/boards/:boardId/cards/:cardId/comments', requireAuth, (req, res) 
       entityType: 'card',
       entityId: card.id,
       message: `${req.user.name} أشار إليك في تعليق على البطاقة «${card.title}»`
-    });
-  });
+    })));
 
-  const comment = getCommentsForCard(card.id).find((item) => item.id === commentId);
-  const commentCount = db.prepare('SELECT COUNT(*) AS count FROM comments WHERE card_id = ?').get(card.id).count;
-  const activity = getActivityForCard(card.id, board.id);
+  const comment = (await getCommentsForCard(card.id)).find((item) => item.id === commentId);
+  const commentCount = (await db.prepare('SELECT COUNT(*) AS count FROM comments WHERE card_id = ?').get(card.id)).count;
+  const activity = await getActivityForCard(card.id, board.id);
 
   io.to(`board:${board.id}`).emit('board:comment-created', {
     boardId: board.id,
@@ -2389,15 +2373,15 @@ app.post('/api/boards/:boardId/cards/:cardId/comments', requireAuth, (req, res) 
   res.status(201).json({ comment, commentCount, activity });
 });
 
-app.patch('/api/boards/:boardId/cards/:cardId/comments/:commentId', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
-  const card = board ? getCardForBoard(req.params.cardId, board.id) : null;
+app.patch('/api/boards/:boardId/cards/:cardId/comments/:commentId', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
+  const card = board ? await getCardForBoard(req.params.cardId, board.id) : null;
 
   if (!board || !card) {
     return res.status(404).json({ message: 'Card not found' });
   }
 
-  const existingComment = db.prepare(`
+  const existingComment = await db.prepare(`
     SELECT id, user_id AS userId, body FROM comments WHERE id = ? AND card_id = ?
   `).get(req.params.commentId, card.id);
 
@@ -2413,15 +2397,15 @@ app.patch('/api/boards/:boardId/cards/:cardId/comments/:commentId', requireAuth,
   if (!body) return res.status(400).json({ message: 'Comment body is required' });
   if (body.length > 2000) return res.status(400).json({ message: 'Comment must not exceed 2000 characters' });
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE comments SET body = ?, updated_at = CURRENT_TIMESTAMP, edited_at = CURRENT_TIMESTAMP WHERE id = ?
   `).run(body, existingComment.id);
-  logActivity(board.id, req.user.id, 'comment_updated', 'card', card.id, { title: card.title });
+  await logActivity(board.id, req.user.id, 'comment_updated', 'card', card.id, { title: card.title });
 
-  const previousMentionIds = new Set(getMentionedMembers(board.id, existingComment.body, req.user.id).map((member) => member.id));
-  getMentionedMembers(board.id, body, req.user.id)
+  const previousMentionIds = new Set((await getMentionedMembers(board.id, existingComment.body, req.user.id)).map((member) => member.id));
+  await Promise.all((await getMentionedMembers(board.id, body, req.user.id))
     .filter((member) => !previousMentionIds.has(member.id))
-    .forEach((member) => createNotification({
+    .map((member) => createNotification({
       userId: member.id,
       boardId: board.id,
       actorId: req.user.id,
@@ -2429,10 +2413,10 @@ app.patch('/api/boards/:boardId/cards/:cardId/comments/:commentId', requireAuth,
       entityType: 'card',
       entityId: card.id,
       message: `${req.user.name} أشار إليك في تعليق على البطاقة «${card.title}»`
-    }));
+    })));
 
-  const comment = getCommentsForCard(card.id).find((item) => item.id === existingComment.id);
-  const activity = getActivityForCard(card.id, board.id);
+  const comment = (await getCommentsForCard(card.id)).find((item) => item.id === existingComment.id);
+  const activity = await getActivityForCard(card.id, board.id);
   io.to(`board:${board.id}`).emit('board:comment-updated', {
     boardId: board.id,
     cardId: card.id,
@@ -2442,15 +2426,15 @@ app.patch('/api/boards/:boardId/cards/:cardId/comments/:commentId', requireAuth,
   res.json({ comment, activity });
 });
 
-app.delete('/api/boards/:boardId/cards/:cardId/comments/:commentId', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
-  const card = board ? getCardForBoard(req.params.cardId, board.id) : null;
+app.delete('/api/boards/:boardId/cards/:cardId/comments/:commentId', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
+  const card = board ? await getCardForBoard(req.params.cardId, board.id) : null;
 
   if (!board || !card) {
     return res.status(404).json({ message: 'Card not found' });
   }
 
-  const comment = db.prepare(`
+  const comment = await db.prepare(`
     SELECT id, user_id AS userId FROM comments WHERE id = ? AND card_id = ?
   `).get(req.params.commentId, card.id);
 
@@ -2462,10 +2446,10 @@ app.delete('/api/boards/:boardId/cards/:cardId/comments/:commentId', requireAuth
     return res.status(403).json({ message: 'You can only delete your own comments' });
   }
 
-  db.prepare('DELETE FROM comments WHERE id = ?').run(comment.id);
-  logActivity(board.id, req.user.id, 'comment_deleted', 'card', card.id, { title: card.title });
-  const commentCount = db.prepare('SELECT COUNT(*) AS count FROM comments WHERE card_id = ?').get(card.id).count;
-  const activity = getActivityForCard(card.id, board.id);
+  await db.prepare('DELETE FROM comments WHERE id = ?').run(comment.id);
+  await logActivity(board.id, req.user.id, 'comment_deleted', 'card', card.id, { title: card.title });
+  const commentCount = (await db.prepare('SELECT COUNT(*) AS count FROM comments WHERE card_id = ?').get(card.id)).count;
+  const activity = await getActivityForCard(card.id, board.id);
 
   io.to(`board:${board.id}`).emit('board:comment-deleted', {
     boardId: board.id,
@@ -2477,14 +2461,14 @@ app.delete('/api/boards/:boardId/cards/:cardId/comments/:commentId', requireAuth
   res.json({ commentId: comment.id, commentCount, activity });
 });
 
-app.delete('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
-  const board = getBoardForUser(req.params.boardId, req.user.id);
+app.delete('/api/boards/:boardId/cards/:cardId', requireAuth, async (req, res) => {
+  const board = await getBoardForUser(req.params.boardId, req.user.id);
 
   if (!board) {
     return res.status(404).json({ message: 'Board not found' });
   }
 
-  const card = getCardForBoard(req.params.cardId, board.id);
+  const card = await getCardForBoard(req.params.cardId, board.id);
 
   if (!card) {
     return res.status(404).json({ message: 'Card not found' });
@@ -2494,24 +2478,24 @@ app.delete('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
     return;
   }
 
-  const storedAttachments = db.prepare(`
+  const storedAttachments = await db.prepare(`
     SELECT stored_name AS storedName FROM attachments WHERE card_id = ?
     UNION ALL
     SELECT stored_name AS storedName FROM subtask_attachments WHERE card_id = ?
   `).all(card.id, card.id);
-  db.prepare('DELETE FROM attachments WHERE card_id = ?').run(card.id);
-  db.prepare('DELETE FROM subtask_attachments WHERE card_id = ?').run(card.id);
+  await db.prepare('DELETE FROM attachments WHERE card_id = ?').run(card.id);
+  await db.prepare('DELETE FROM subtask_attachments WHERE card_id = ?').run(card.id);
   deleteStoredAttachments(storedAttachments);
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE cards
     SET deleted_at = CURRENT_TIMESTAMP, version = version + 1, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(card.id);
-  db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
-  logActivity(board.id, req.user.id, 'deleted', 'card', card.id, { title: card.title });
+  await db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+  await logActivity(board.id, req.user.id, 'deleted', 'card', card.id, { title: card.title });
 
-  const sourceCards = db
+  const sourceCards = await db
     .prepare(`
       SELECT id
       FROM cards
@@ -2521,9 +2505,7 @@ app.delete('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
     `)
     .all(card.columnId);
   const updatePosition = db.prepare('UPDATE cards SET position = ? WHERE id = ?');
-  sourceCards.forEach((sourceCard, index) => {
-    updatePosition.run(index, sourceCard.id);
-  });
+  await Promise.all(sourceCards.map((sourceCard, index) => updatePosition.run(index, sourceCard.id)));
 
   io.to(`board:${board.id}`).emit('board:card-deleted', {
     boardId: board.id,
@@ -2544,7 +2526,7 @@ io.on('connection', (socket) => {
 
   socket.data.joinedBoards = new Set();
 
-  socket.on('board:join', (payload, acknowledge) => {
+  socket.on('board:join', async (payload, acknowledge) => {
     const boardId = typeof payload === 'string' ? payload : payload?.boardId;
     const user = socket.data.user;
 
@@ -2553,7 +2535,7 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const board = getBoardForUser(boardId, user.id);
+    const board = await getBoardForUser(boardId, user.id);
 
     if (!board) {
       acknowledge?.({ ok: false, message: 'You are not a member of this board' });
@@ -2582,15 +2564,15 @@ io.on('connection', (socket) => {
       });
     }
 
-    emitPresence(boardId);
+    await emitPresence(boardId);
     acknowledge?.({ ok: true });
   });
 
-  socket.on('board:leave', (boardId) => {
+  socket.on('board:leave', async (boardId) => {
     socket.leave(`board:${boardId}`);
     socket.data.joinedBoards.delete(boardId);
 
-    removeSocketFromBoardPresence(boardId, socket);
+    await removeSocketFromBoardPresence(boardId, socket);
   });
 
   socket.on('demo:message', (payload) => {
@@ -2610,6 +2592,14 @@ io.on('connection', (socket) => {
   });
 });
 
+if (existsSync(clientDistDir)) {
+  app.use(express.static(clientDistDir));
+  app.get(/.*/, (req, res, next) => {
+    if (req.path.startsWith('/api/')) return next();
+    return res.sendFile(join(clientDistDir, 'index.html'));
+  });
+}
+
 app.use((error, req, res, next) => {
   console.error(error);
 
@@ -2624,7 +2614,7 @@ app.use((error, req, res, next) => {
   return res.status(500).json({ message: 'Internal server error' });
 });
 
-processDueDateNotifications();
+await processDueDateNotifications();
 const dueDateNotificationTimer = setInterval(processDueDateNotifications, 15 * 60 * 1000);
 dueDateNotificationTimer.unref();
 

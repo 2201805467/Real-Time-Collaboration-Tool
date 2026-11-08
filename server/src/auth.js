@@ -93,7 +93,7 @@ export function getPublicUser(user) {
   };
 }
 
-export function requireAuth(req, res, next) {
+export async function requireAuth(req, res, next) {
   const authHeader = req.get('authorization') || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
   const payload = verifyToken(token);
@@ -102,7 +102,7 @@ export function requireAuth(req, res, next) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
 
-  const user = db
+  const user = await db
     .prepare(`
       SELECT id, name, email, avatar_url AS avatarUrl, created_at AS createdAt,
         notify_assignments AS notifyAssignments,

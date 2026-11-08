@@ -5,6 +5,8 @@ import CardDeleteDialog from '../components/CardDeleteDialog.jsx';
 import CommentDeleteDialog from '../components/CommentDeleteDialog.jsx';
 import UserAvatar from '../components/UserAvatar.jsx';
 
+const fileFeaturesEnabled = false;
+
 const activityIcons = {
   created: PlusCircle,
   updated: Pencil,
@@ -411,7 +413,7 @@ function TaskDetailsPage({
                             </div>
                           )}
                         </section>
-                        <section className="attachments-panel" aria-label="مرفقات البطاقة">
+                        {fileFeaturesEnabled ? <section className="attachments-panel" aria-label="مرفقات البطاقة">
                           <div className="attachments-heading">
                             <div><Paperclip size={18} /><h4>المرفقات</h4></div>
                             <span>{attachments.length}</span>
@@ -448,7 +450,7 @@ function TaskDetailsPage({
                               ))}
                             </div>
                           )}
-                        </section>
+                        </section> : null}
                         <button type="submit" disabled={isSavingCardDetails || !canSaveSelectedCard}>
                           {isSavingCardDetails ? 'جاري الحفظ...' : 'حفظ التفاصيل'}
                         </button>
@@ -539,7 +541,7 @@ function TaskDetailsPage({
                       </section>
                         </aside>
                       </div>
-                      {attachmentToDelete ? (
+                      {fileFeaturesEnabled && attachmentToDelete ? (
                         <AttachmentDeleteDialog
                           attachment={attachmentToDelete}
                           isDeleting={deletingAttachmentId === attachmentToDelete.id}

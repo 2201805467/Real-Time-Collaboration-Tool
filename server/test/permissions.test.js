@@ -112,7 +112,8 @@ before(async () => {
     env: {
       ...process.env,
       PORT: String(port),
-      COLLAB_DB_PATH: databasePath
+      COLLAB_DB_PATH: databasePath,
+      FILE_FEATURES_ENABLED: 'true'
     },
     stdio: ['ignore', 'pipe', 'pipe']
   });

@@ -4,6 +4,8 @@ import AttachmentDeleteDialog from '../components/AttachmentDeleteDialog.jsx';
 import UserAvatar from '../components/UserAvatar.jsx';
 import { myTasksApi } from '../api/myTasksApi.js';
 
+const fileFeaturesEnabled = false;
+
 const statusLabels = {
   todo: 'لم تبدأ',
   in_progress: 'قيد التنفيذ',
@@ -165,7 +167,7 @@ export default function MyTasksPage({ token, refreshKey, onOpenCard }) {
                 </div>
                 {task.reviewNote ? <div className="my-task-review-note"><strong>ملاحظة المراجع</strong><p>{task.reviewNote}</p></div> : null}
 
-                <TaskAttachments task={task} token={token} canChange={canChangeFiles} busyKey={busyKey} onUpload={uploadFile} onDownload={downloadFile} onAskDelete={(selectedTask, attachment) => setDeleteTarget({ task: selectedTask, attachment })} />
+                {fileFeaturesEnabled ? <TaskAttachments task={task} token={token} canChange={canChangeFiles} busyKey={busyKey} onUpload={uploadFile} onDownload={downloadFile} onAskDelete={(selectedTask, attachment) => setDeleteTarget({ task: selectedTask, attachment })} /> : null}
 
                 {isReviewTab ? (
                   <div className="my-task-review-actions">
@@ -188,7 +190,7 @@ export default function MyTasksPage({ token, refreshKey, onOpenCard }) {
         </div>
       ) : <div className="empty-state"><ListChecks size={30} /><strong>لا توجد مهام في هذا القسم</strong><span>{activeTab === 'review' ? 'ستظهر هنا المهام التي يرسلها الأعضاء للمراجعة.' : 'ستظهر هنا المهام التي يسندها إليك المسؤول.'}</span></div>}
 
-      {deleteTarget ? <AttachmentDeleteDialog attachment={deleteTarget.attachment} isDeleting={busyKey === `delete:${deleteTarget.attachment.id}`} onCancel={() => setDeleteTarget(null)} onConfirm={confirmDeleteFile} /> : null}
+      {fileFeaturesEnabled && deleteTarget ? <AttachmentDeleteDialog attachment={deleteTarget.attachment} isDeleting={busyKey === `delete:${deleteTarget.attachment.id}`} onCancel={() => setDeleteTarget(null)} onConfirm={confirmDeleteFile} /> : null}
     </section>
   );
 }

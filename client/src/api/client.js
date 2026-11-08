@@ -1,5 +1,9 @@
-export const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-export const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:4000';
+const developmentServerUrl = 'http://localhost:4000';
+const applicationOrigin = typeof window !== 'undefined' ? window.location.origin : developmentServerUrl;
+const defaultServerUrl = import.meta.env.DEV ? developmentServerUrl : applicationOrigin;
+
+export const apiUrl = import.meta.env.VITE_API_URL || defaultServerUrl;
+export const socketUrl = import.meta.env.VITE_SOCKET_URL || defaultServerUrl;
 
 export class ApiError extends Error {
   constructor(message, status, data = null) {
