@@ -357,7 +357,8 @@ app.patch('/api/auth/profile', requireAuth, (req, res) => {
   const user = db.prepare(`
     SELECT id, name, email, avatar_url AS avatarUrl, created_at AS createdAt,
       notify_assignments AS notifyAssignments,
-      notify_comments AS notifyComments
+      notify_comments AS notifyComments,
+      notify_due_dates AS notifyDueDates
     FROM users WHERE id = ?
   `).get(req.user.id);
   const publicUser = getPublicUser(user);
@@ -389,7 +390,8 @@ app.patch('/api/auth/avatar', requireAuth, (req, res) => {
   const user = db.prepare(`
     SELECT id, name, email, avatar_url AS avatarUrl, created_at AS createdAt,
       notify_assignments AS notifyAssignments,
-      notify_comments AS notifyComments
+      notify_comments AS notifyComments,
+      notify_due_dates AS notifyDueDates
     FROM users WHERE id = ?
   `).get(req.user.id);
   const publicUser = getPublicUser(user);
@@ -420,13 +422,14 @@ app.patch('/api/auth/password', requireAuth, (req, res) => {
 app.patch('/api/auth/preferences', requireAuth, (req, res) => {
   const assignments = req.body.assignments !== false;
   const comments = req.body.comments !== false;
+  const dueDates = req.body.dueDates !== false;
   db.prepare(`
     UPDATE users
-    SET notify_assignments = ?, notify_comments = ?, updated_at = CURRENT_TIMESTAMP
+    SET notify_assignments = ?, notify_comments = ?, notify_due_dates = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
-  `).run(assignments ? 1 : 0, comments ? 1 : 0, req.user.id);
+  `).run(assignments ? 1 : 0, comments ? 1 : 0, dueDates ? 1 : 0, req.user.id);
 
-  res.json({ notificationPreferences: { assignments, comments } });
+  res.json({ notificationPreferences: { assignments, comments, dueDates } });
 });
 
 app.get('/api/notifications', requireAuth, (req, res) => {
@@ -522,27 +525,35 @@ function logActivity(boardId, userId, action, entityType, entityId, metadata = {
   `).run(randomUUID(), boardId, userId, action, entityType, entityId, JSON.stringify(metadata));
 }
 
-function createNotification({ userId, boardId, actorId, type, entityType, entityId, message }) {
+function createNotification({ userId, boardId, actorId, type, entityType, entityId, message, dedupeKey = null }) {
   if (!userId || userId === actorId) {
     return null;
   }
 
   const preferences = db.prepare(`
-    SELECT notify_assignments AS assignments, notify_comments AS comments
+    SELECT notify_assignments AS assignments, notify_comments AS comments,
+      notify_due_dates AS dueDates
     FROM users WHERE id = ?
   `).get(userId);
   const isCommentNotification = type === 'card_commented' || type === 'comment_mentioned';
+  const isDueDateNotification = type.startsWith('due_');
 
-  if (!preferences || (isCommentNotification ? !preferences.comments : !preferences.assignments)) {
+  if (!preferences || (isCommentNotification && !preferences.comments) ||
+      (isDueDateNotification && !preferences.dueDates) ||
+      (!isCommentNotification && !isDueDateNotification && !preferences.assignments)) {
+    return null;
+  }
+
+  if (dedupeKey && db.prepare('SELECT 1 FROM notifications WHERE dedupe_key = ?').get(dedupeKey)) {
     return null;
   }
 
   const notificationId = randomUUID();
   db.prepare(`
     INSERT INTO notifications (
-      id, user_id, board_id, actor_id, type, entity_type, entity_id, message
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(notificationId, userId, boardId, actorId, type, entityType, entityId, message);
+      id, user_id, board_id, actor_id, type, entity_type, entity_id, message, dedupe_key
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(notificationId, userId, boardId, actorId, type, entityType, entityId, message, dedupeKey);
 
   const notification = db.prepare(`
     SELECT
@@ -573,6 +584,57 @@ function isCompletionColumnTitle(title) {
   return ['done', 'complete', 'completed', 'مكتملة', 'تم', 'منجزة'].some((word) => normalizedTitle.includes(word));
 }
 
+function daysUntilDate(dateValue) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateValue || ''))) return null;
+  const today = new Date();
+  const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  const dueDate = new Date(`${dateValue}T00:00:00Z`).getTime();
+  return Math.round((dueDate - todayUtc) / (24 * 60 * 60 * 1000));
+}
+
+function processDueDateNotifications() {
+  const cards = db.prepare(`
+    SELECT cards.id, cards.title, cards.due_date AS dueDate, cards.assignee_id AS assigneeId,
+      cards.checklist, boards.id AS boardId, boards.owner_id AS ownerId,
+      board_columns.title AS columnTitle
+    FROM cards
+    INNER JOIN board_columns ON board_columns.id = cards.column_id
+    INNER JOIN boards ON boards.id = board_columns.board_id
+    WHERE cards.deleted_at IS NULL AND cards.due_date IS NOT NULL
+  `).all();
+
+  cards.forEach((card) => {
+    if (isCompletionColumnTitle(card.columnTitle)) return;
+    const daysLeft = daysUntilDate(card.dueDate);
+    if (daysLeft === null || daysLeft > 2) return;
+
+    const type = daysLeft < 0 ? 'due_overdue' : daysLeft === 0 ? 'due_today' : 'due_soon';
+    const message = daysLeft < 0
+      ? `البطاقة «${card.title}» متأخرة عن موعدها منذ ${Math.abs(daysLeft)} يوم`
+      : daysLeft === 0
+        ? `موعد البطاقة «${card.title}» هو اليوم`
+        : `تبقى ${daysLeft === 1 ? 'يوم واحد' : 'يومان'} على موعد البطاقة «${card.title}»`;
+    const recipients = new Set([
+      card.ownerId,
+      card.assigneeId,
+      ...normalizeChecklist(parseJsonList(card.checklist)).map((item) => item.assigneeId)
+    ]);
+    recipients.delete(null);
+    recipients.delete('');
+
+    recipients.forEach((userId) => createNotification({
+      userId,
+      boardId: card.boardId,
+      actorId: null,
+      type,
+      entityType: 'card',
+      entityId: card.id,
+      message,
+      dedupeKey: `${type}:${card.id}:${userId}:${card.dueDate}`
+    }));
+  });
+}
+
 function getWorkspaceStats(userId) {
   const boards = db
     .prepare(`
@@ -588,6 +650,7 @@ function getWorkspaceStats(userId) {
       boards: { total: 0, owned: 0, shared: 0 },
       cards: { total: 0, completed: 0, completedThisWeek: 0 },
       checklist: { total: 0, completed: 0 },
+      deadlines: { overdue: 0, dueToday: 0, dueSoon: 0, items: [] },
       velocity: 0,
       storage: { usedPercent: 0, usedLabel: '0 GB', limitLabel: '20 GB' }
     };
@@ -596,9 +659,12 @@ function getWorkspaceStats(userId) {
   const boardIds = new Set(boards.map((board) => board.id));
   const cards = db
     .prepare(`
-      SELECT cards.id, cards.checklist, cards.updated_at AS updatedAt, board_columns.title AS columnTitle
+      SELECT cards.id, cards.title, cards.due_date AS dueDate, cards.checklist,
+        cards.updated_at AS updatedAt, board_columns.title AS columnTitle,
+        boards.id AS boardId, boards.title AS boardTitle
       FROM cards
       INNER JOIN board_columns ON board_columns.id = cards.column_id
+      INNER JOIN boards ON boards.id = board_columns.board_id
       INNER JOIN board_members ON board_members.board_id = board_columns.board_id
       WHERE board_members.user_id = ?
         AND cards.deleted_at IS NULL
@@ -611,6 +677,11 @@ function getWorkspaceStats(userId) {
   const completedChecklist = checklist.filter((item) => item.status === 'done' || item.done).length;
   const completionUnits = cards.length + checklist.length;
   const completedUnits = completedCards.length + completedChecklist;
+  const deadlineCards = cards
+    .filter((card) => card.dueDate && !isCompletionColumnTitle(card.columnTitle))
+    .map((card) => ({ ...card, daysLeft: daysUntilDate(card.dueDate) }))
+    .filter((card) => card.daysLeft !== null && card.daysLeft <= 7)
+    .sort((first, second) => first.daysLeft - second.daysLeft);
 
   return {
     boards: {
@@ -626,6 +697,19 @@ function getWorkspaceStats(userId) {
     checklist: {
       total: checklist.length,
       completed: completedChecklist
+    },
+    deadlines: {
+      overdue: deadlineCards.filter((card) => card.daysLeft < 0).length,
+      dueToday: deadlineCards.filter((card) => card.daysLeft === 0).length,
+      dueSoon: deadlineCards.filter((card) => card.daysLeft > 0 && card.daysLeft <= 2).length,
+      items: deadlineCards.slice(0, 5).map((card) => ({
+        cardId: card.id,
+        cardTitle: card.title,
+        boardId: card.boardId,
+        boardTitle: card.boardTitle,
+        dueDate: card.dueDate,
+        daysLeft: card.daysLeft
+      }))
     },
     velocity: completionUnits ? Math.round((completedUnits / completionUnits) * 1000) / 10 : 0,
     storage: {
@@ -1923,6 +2007,8 @@ app.patch('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
     });
   });
 
+  processDueDateNotifications();
+
   const card = getCardForBoard(existingCard.id, board.id);
   const activity = getActivityForCard(card.id, board.id);
 
@@ -2245,6 +2331,10 @@ app.use((error, req, res, next) => {
 
   return res.status(500).json({ message: 'Internal server error' });
 });
+
+processDueDateNotifications();
+const dueDateNotificationTimer = setInterval(processDueDateNotifications, 15 * 60 * 1000);
+dueDateNotificationTimer.unref();
 
 httpServer.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);

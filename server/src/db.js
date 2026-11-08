@@ -161,8 +161,16 @@ ensureColumn('cards', 'checklist', "TEXT NOT NULL DEFAULT '[]'");
 ensureColumn('board_members', 'last_seen', 'TEXT');
 ensureColumn('users', 'notify_assignments', 'INTEGER NOT NULL DEFAULT 1');
 ensureColumn('users', 'notify_comments', 'INTEGER NOT NULL DEFAULT 1');
+ensureColumn('users', 'notify_due_dates', 'INTEGER NOT NULL DEFAULT 1');
 ensureColumn('users', 'avatar_url', 'TEXT');
 ensureColumn('comments', 'edited_at', 'TEXT');
+ensureColumn('notifications', 'dedupe_key', 'TEXT');
+
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedupe_key
+  ON notifications(dedupe_key)
+  WHERE dedupe_key IS NOT NULL;
+`);
 
 export function getDatabaseSummary() {
   const tables = db

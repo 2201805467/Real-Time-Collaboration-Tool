@@ -415,6 +415,29 @@ test('owner, manager, and member permissions follow the project hierarchy', asyn
   const readManagerNotifications = await api('/api/notifications', { token: manager.token });
   assert.equal(readManagerNotifications.data.unreadCount, 0);
 
+  const today = new Date().toISOString().slice(0, 10);
+  const dueTodayCard = await api(`/api/boards/${boardId}/cards/${cardId}`, {
+    method: 'PATCH',
+    token: owner.token,
+    body: { dueDate: today }
+  });
+  assert.equal(dueTodayCard.status, 200);
+
+  const managerDueNotifications = await api('/api/notifications', { token: manager.token });
+  assert.equal(managerDueNotifications.data.notifications.filter((item) => item.type === 'due_today').length, 1);
+
+  await api(`/api/boards/${boardId}/cards/${cardId}`, {
+    method: 'PATCH',
+    token: owner.token,
+    body: { dueDate: today }
+  });
+  const deduplicatedDueNotifications = await api('/api/notifications', { token: manager.token });
+  assert.equal(deduplicatedDueNotifications.data.notifications.filter((item) => item.type === 'due_today').length, 1);
+
+  const workspaceWithDeadline = await api('/api/workspace/stats', { token: owner.token });
+  assert.equal(workspaceWithDeadline.data.stats.deadlines.dueToday, 1);
+  assert.equal(workspaceWithDeadline.data.stats.deadlines.items[0].cardId, cardId);
+
   const movedCard = await api(`/api/boards/${boardId}/cards/${cardId}/move`, {
     method: 'PATCH',
     token: owner.token,
@@ -520,16 +543,18 @@ test('owner, manager, and member permissions follow the project hierarchy', asyn
   const savedPreferences = await api('/api/auth/preferences', {
     method: 'PATCH',
     token: newPasswordLogin.data.token,
-    body: { assignments: false, comments: false }
+    body: { assignments: false, comments: false, dueDates: false }
   });
   assert.equal(savedPreferences.status, 200);
   assert.deepEqual(savedPreferences.data.notificationPreferences, {
     assignments: false,
-    comments: false
+    comments: false,
+    dueDates: false
   });
 
   const currentUser = await api('/api/auth/me', { token: newPasswordLogin.data.token });
   assert.equal(currentUser.status, 200);
   assert.equal(currentUser.data.user.notificationPreferences.assignments, false);
   assert.equal(currentUser.data.user.notificationPreferences.comments, false);
+  assert.equal(currentUser.data.user.notificationPreferences.dueDates, false);
 });

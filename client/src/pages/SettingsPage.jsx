@@ -56,7 +56,7 @@ export default function SettingsPage({
   const [profile, setProfile] = useState({ name: user.name, email: user.email });
   const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [preferences, setPreferences] = useState(
-    user.notificationPreferences || { assignments: true, comments: true }
+    user.notificationPreferences || { assignments: true, comments: true, dueDates: true }
   );
   const [savingSection, setSavingSection] = useState('');
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -64,7 +64,7 @@ export default function SettingsPage({
 
   useEffect(() => {
     setProfile({ name: user.name, email: user.email });
-    setPreferences(user.notificationPreferences || { assignments: true, comments: true });
+    setPreferences(user.notificationPreferences || { assignments: true, comments: true, dueDates: true });
   }, [user]);
 
   async function runSave(section, action, successMessage) {
@@ -179,6 +179,7 @@ export default function SettingsPage({
           <div className="settings-card-title"><span><Bell size={19} /></span><div><h3>الإشعارات</h3><p>اختر الأحداث التي تريد تلقي إشعارات عنها.</p></div></div>
           <label className="settings-switch"><span><strong>التعيينات</strong><small>عند إسناد بطاقة أو مهمة فرعية إليك.</small></span><input type="checkbox" checked={preferences.assignments} onChange={(event) => setPreferences((current) => ({ ...current, assignments: event.target.checked }))} /></label>
           <label className="settings-switch"><span><strong>التعليقات</strong><small>عند إضافة تعليق إلى بطاقة مرتبطة بك.</small></span><input type="checkbox" checked={preferences.comments} onChange={(event) => setPreferences((current) => ({ ...current, comments: event.target.checked }))} /></label>
+          <label className="settings-switch"><span><strong>مواعيد الاستحقاق</strong><small>عند اقتراب موعد البطاقة أو تأخرها عن الموعد.</small></span><input type="checkbox" checked={preferences.dueDates !== false} onChange={(event) => setPreferences((current) => ({ ...current, dueDates: event.target.checked }))} /></label>
           <button type="submit" disabled={savingSection === 'preferences'}><Save size={17} />{savingSection === 'preferences' ? 'جاري الحفظ...' : 'حفظ التفضيلات'}</button>
         </form>
 

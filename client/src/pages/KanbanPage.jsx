@@ -3,6 +3,7 @@ import { DndContext, useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { Calendar, CircleCheck, ListChecks, MessageSquare, MoreHorizontal, Paperclip, Plus, Trash2 } from 'lucide-react';
 import UserAvatar from '../components/UserAvatar.jsx';
+import { getDueDateMeta, isCompletionColumn } from '../utils/dueDate.js';
 
 const priorityStyles = {
   urgent: 'bg-error-container text-on-error-container',
@@ -39,14 +40,15 @@ function DroppableColumn({ column, index, children }) {
   );
 }
 
-function DraggableCard({ card, onOpen, canMove }) {
+function DraggableCard({ card, onOpen, canMove, isComplete }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: card.id, disabled: !canMove });
   const progress = getChecklistProgress(card);
+  const dueDateMeta = isComplete ? null : getDueDateMeta(card.dueDate);
 
   return (
     <article
       ref={setNodeRef}
-      className={`task-card group rounded-xl bg-surface-container-lowest p-space-md shadow-stitch transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card ${
+      className={`task-card ${dueDateMeta ? `due-${dueDateMeta.tone}` : ''} group rounded-xl bg-surface-container-lowest p-space-md shadow-stitch transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card ${
         canMove ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
       } ${isDragging ? 'dragging opacity-75 shadow-card' : ''}`}
       style={{ transform: CSS.Translate.toString(transform) }}
@@ -93,7 +95,7 @@ function DraggableCard({ card, onOpen, canMove }) {
           {card.attachmentCount ? <span className="inline-flex items-center gap-1"><Paperclip size={15} /><span>{card.attachmentCount}</span></span> : null}
           {card.commentCount ? <span className="inline-flex items-center gap-1"><MessageSquare size={15} /><span>{card.commentCount}</span></span> : null}
           {card.checklistTotal ? <span className="inline-flex items-center gap-1"><CircleCheck size={15} /><span>{progress}%</span></span> : null}
-          {card.dueDate ? <span className="inline-flex items-center gap-1"><Calendar size={15} /><span>{card.dueDate}</span></span> : null}
+          {card.dueDate ? <span className={`card-due-date ${dueDateMeta?.tone || 'complete'} inline-flex items-center gap-1`}><Calendar size={15} /><span>{dueDateMeta?.label || card.dueDate}</span></span> : null}
         </div>
       </div>
     </article>
@@ -206,7 +208,7 @@ function KanbanPage({
 
                 <div className="card-list">
                   {column.cards.length === 0 ? <p className="column-empty">{hasActiveFilters ? 'لا توجد بطاقات مطابقة.' : 'اسحب بطاقة إلى هنا.'}</p> : (
-                    column.cards.map((card) => <DraggableCard key={card.id} card={card} onOpen={onOpenCard} canMove={userIsBoardOwner || card.assigneeId === user?.id} />)
+                    column.cards.map((card) => <DraggableCard key={card.id} card={card} onOpen={onOpenCard} canMove={userIsBoardOwner || card.assigneeId === user?.id} isComplete={isCompletionColumn(column.title)} />)
                   )}
                 </div>
 

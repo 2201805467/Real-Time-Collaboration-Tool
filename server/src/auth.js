@@ -87,7 +87,8 @@ export function getPublicUser(user) {
     createdAt: user.createdAt || user.created_at || null,
     notificationPreferences: {
       assignments: Boolean(user.notifyAssignments ?? user.notify_assignments ?? 1),
-      comments: Boolean(user.notifyComments ?? user.notify_comments ?? 1)
+      comments: Boolean(user.notifyComments ?? user.notify_comments ?? 1),
+      dueDates: Boolean(user.notifyDueDates ?? user.notify_due_dates ?? 1)
     }
   };
 }
@@ -105,7 +106,8 @@ export function requireAuth(req, res, next) {
     .prepare(`
       SELECT id, name, email, avatar_url AS avatarUrl, created_at AS createdAt,
         notify_assignments AS notifyAssignments,
-        notify_comments AS notifyComments
+        notify_comments AS notifyComments,
+        notify_due_dates AS notifyDueDates
       FROM users WHERE id = ?
     `)
     .get(payload.sub);

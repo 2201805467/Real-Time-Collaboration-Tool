@@ -5,6 +5,7 @@ const emptyWorkspaceStats = {
   boards: { total: 0, owned: 0, shared: 0 },
   cards: { total: 0, completed: 0, completedThisWeek: 0 },
   checklist: { total: 0, completed: 0 },
+  deadlines: { overdue: 0, dueToday: 0, dueSoon: 0, items: [] },
   velocity: 0,
   storage: { usedPercent: 0, usedLabel: '0 GB', limitLabel: '20 GB' }
 };

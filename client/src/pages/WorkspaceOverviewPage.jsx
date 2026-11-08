@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   CircleCheck,
+  Clock3,
   FolderOpen,
   Gauge,
   Grid2X2,
@@ -16,6 +17,7 @@ import {
   Zap
 } from 'lucide-react';
 import UserAvatar from '../components/UserAvatar.jsx';
+import { getDueDateMeta } from '../utils/dueDate.js';
 
 function WorkspaceOverviewPage({
   workspaceStats,
@@ -246,6 +248,31 @@ function WorkspaceOverviewPage({
         </section>
 
         <aside className="hub-side-panel" aria-label="Workspace activity">
+          <section className="hub-deadlines-card">
+            <div className="hub-section-title compact">
+              <div><h3>المواعيد القريبة</h3><p>البطاقات التي تحتاج إلى انتباهك</p></div>
+              <Clock3 size={18} aria-hidden="true" />
+            </div>
+            <div className="deadline-summary">
+              <span className="overdue">{workspaceStats.deadlines?.overdue || 0} متأخرة</span>
+              <span className="today">{workspaceStats.deadlines?.dueToday || 0} اليوم</span>
+              <span>{workspaceStats.deadlines?.dueSoon || 0} قريبًا</span>
+            </div>
+            <div className="deadline-items">
+              {(workspaceStats.deadlines?.items || []).length === 0 ? (
+                <p className="column-empty">لا توجد مواعيد قريبة أو متأخرة.</p>
+              ) : (workspaceStats.deadlines.items.map((item) => {
+                const dueMeta = getDueDateMeta(item.dueDate);
+                return (
+                  <button key={item.cardId} type="button" onClick={() => onOpenBoard(item.boardId)}>
+                    <span className={`deadline-dot ${dueMeta?.tone || 'normal'}`} />
+                    <span><strong>{item.cardTitle}</strong><small>{item.boardTitle}</small></span>
+                    <em className={dueMeta?.tone || 'normal'}>{dueMeta?.label || item.dueDate}</em>
+                  </button>
+                );
+              }))}
+            </div>
+          </section>
           <section className="hub-quick-actions">
             <div className="hub-section-title compact">
               <div><h3>إجراءات فورية سريعة</h3><p>اختصارات لإدارة مساحة العمل</p></div>

@@ -3673,6 +3673,142 @@ button:disabled {
   box-shadow: var(--shadow-card);
 }
 
+.workspace-shell .task-card.due-overdue {
+  border: 1px solid color-mix(in srgb, var(--error) 58%, transparent);
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--error) 13%, transparent);
+}
+
+.workspace-shell .task-card.due-today {
+  border: 1px solid color-mix(in srgb, #d48418 58%, transparent);
+}
+
+.card-due-date {
+  padding: 3px 6px;
+  border-radius: 7px;
+}
+
+.card-due-date.overdue {
+  color: var(--error);
+  background: var(--error-container);
+  font-weight: 800;
+}
+
+.card-due-date.today {
+  color: #8c5100;
+  background: #fff0ce;
+  font-weight: 800;
+}
+
+.card-due-date.soon {
+  color: var(--primary);
+  background: var(--primary-fixed);
+  font-weight: 800;
+}
+
+.hub-deadlines-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--outline-variant);
+  border-radius: 14px;
+  background: var(--surface-lowest);
+  box-shadow: var(--shadow-soft);
+}
+
+.deadline-summary {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.deadline-summary span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: var(--primary);
+  background: var(--primary-fixed);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.deadline-summary .overdue {
+  color: var(--error);
+  background: var(--error-container);
+}
+
+.deadline-summary .today {
+  color: #8c5100;
+  background: #fff0ce;
+}
+
+.deadline-items {
+  display: grid;
+  gap: 7px;
+  max-height: 255px;
+  overflow-y: auto;
+}
+
+.deadline-items button {
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  min-height: 48px;
+  padding: 8px;
+  border-color: var(--outline-variant);
+  color: var(--on-surface);
+  background: var(--surface-container-low);
+  text-align: start;
+}
+
+.deadline-items button > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.deadline-items strong,
+.deadline-items small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deadline-items small {
+  color: var(--on-surface-variant);
+}
+
+.deadline-items em {
+  color: var(--primary);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.deadline-items em.overdue {
+  color: var(--error);
+}
+
+.deadline-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary-container);
+}
+
+.deadline-dot.overdue {
+  background: var(--error);
+}
+
+.deadline-dot.today {
+  background: #d48418;
+}
+
+:root[data-theme="dark"] .card-due-date.today,
+:root[data-theme="dark"] .deadline-summary .today {
+  color: #ffd48a;
+  background: #4b3413;
+}
+
 .workspace-shell button {
   border-radius: 8px;
 }
