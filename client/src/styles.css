@@ -3815,38 +3815,6 @@ button:disabled {
   background: var(--primary-container);
 }
 
-.dark-toggle {
-  position: relative;
-}
-
-.toggle-track {
-  width: 32px;
-  height: 16px;
-  display: inline-flex;
-  align-items: center;
-  margin-right: auto;
-  padding: 2px;
-  border-radius: 999px;
-  background: var(--surface-high);
-}
-
-.toggle-track span {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--surface-lowest);
-  box-shadow: var(--shadow-soft);
-  transition: transform 0.2s ease, background 0.2s ease;
-}
-
-.dark-toggle.active .toggle-track {
-  background: var(--primary-container);
-}
-
-.dark-toggle.active .toggle-track span {
-  transform: translateX(-16px);
-}
-
 .socket-status {
   display: flex;
   align-items: center;

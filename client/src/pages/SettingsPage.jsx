@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Bell, Camera, KeyRound, Moon, Save, Sun, Trash2, UserRound } from 'lucide-react';
+import { Bell, Camera, KeyRound, Save, Trash2, UserRound } from 'lucide-react';
 import UserAvatar from '../components/UserAvatar.jsx';
 
 const acceptedAvatarTypes = ['image/jpeg', 'image/png', 'image/webp'];
@@ -46,8 +46,6 @@ function resizeAvatar(file) {
 
 export default function SettingsPage({
   user,
-  isDarkMode,
-  onToggleTheme,
   onSaveProfile,
   onSaveAvatar,
   onSavePassword,
@@ -138,7 +136,7 @@ export default function SettingsPage({
   return (
     <section className="settings-page" aria-label="الإعدادات العامة">
       <header className="settings-hero">
-        <div><span>الحساب والتفضيلات</span><h2>الإعدادات العامة</h2><p>أدِر بيانات حسابك، الأمان، الإشعارات، ومظهر المنصة.</p></div>
+        <div><span>الحساب والتفضيلات</span><h2>الإعدادات العامة</h2><p>أدِر بيانات حسابك، الأمان، وتفضيلات الإشعارات.</p></div>
         <UserAvatar src={user.avatarUrl} name={user.name} fallbackLength={2} className="settings-avatar" />
       </header>
 
@@ -183,11 +181,6 @@ export default function SettingsPage({
           <button type="submit" disabled={savingSection === 'preferences'}><Save size={17} />{savingSection === 'preferences' ? 'جاري الحفظ...' : 'حفظ التفضيلات'}</button>
         </form>
 
-        <section className="settings-card">
-          <div className="settings-card-title"><span>{isDarkMode ? <Moon size={19} /> : <Sun size={19} />}</span><div><h3>المظهر</h3><p>اختر المظهر المريح لك أثناء العمل.</p></div></div>
-          <button type="button" className="settings-theme-button" onClick={onToggleTheme}>{isDarkMode ? <Sun size={18} /> : <Moon size={18} />}{isDarkMode ? 'التبديل إلى الوضع الفاتح' : 'التبديل إلى الوضع المظلم'}</button>
-          <small>يتم حفظ اختيارك ومزامنته بين نوافذ التطبيق.</small>
-        </section>
       </div>
     </section>
   );

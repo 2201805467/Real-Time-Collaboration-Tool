@@ -81,17 +81,11 @@
   background: #123d31;
 }
 
-:root[data-theme="dark"] .settings-card > button:not(.settings-theme-button) {
+:root[data-theme="dark"] .settings-card > button {
   border: 1px solid #8d82ff;
   color: #ffffff;
   background: linear-gradient(135deg, #8072ff, #6555e8);
   box-shadow: 0 8px 20px rgb(87 70 220 / 0.28);
-}
-
-:root[data-theme="dark"] .settings-theme-button {
-  border: 1px solid #3f4862;
-  color: #ddd9ff;
-  background: #242a3e;
 }
 
 :root[data-theme="dark"] .settings-avatar-editor {
