@@ -1,7 +1,7 @@
 import React from 'react';
 import { DndContext, useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Calendar, CircleCheck, ListChecks, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
+import { Calendar, CircleCheck, ListChecks, MessageSquare, MoreHorizontal, Paperclip, Plus, Trash2 } from 'lucide-react';
 import UserAvatar from '../components/UserAvatar.jsx';
 
 const priorityStyles = {
@@ -90,6 +90,8 @@ function DraggableCard({ card, onOpen, canMove }) {
           <UserAvatar src={card.assigneeAvatarUrl} name={card.assigneeName} fallbackLength={2} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-tertiary-container text-[10px] font-semibold text-on-tertiary ring-2 ring-surface-container-lowest" />
         ) : <span />}
         <div className="flex items-center gap-3 text-label-sm text-on-surface-variant">
+          {card.attachmentCount ? <span className="inline-flex items-center gap-1"><Paperclip size={15} /><span>{card.attachmentCount}</span></span> : null}
+          {card.commentCount ? <span className="inline-flex items-center gap-1"><MessageSquare size={15} /><span>{card.commentCount}</span></span> : null}
           {card.checklistTotal ? <span className="inline-flex items-center gap-1"><CircleCheck size={15} /><span>{progress}%</span></span> : null}
           {card.dueDate ? <span className="inline-flex items-center gap-1"><Calendar size={15} /><span>{card.dueDate}</span></span> : null}
         </div>

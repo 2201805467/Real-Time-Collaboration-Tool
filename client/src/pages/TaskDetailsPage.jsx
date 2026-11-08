@@ -1,12 +1,25 @@
-import React from 'react';
-import { Activity, ArrowLeftRight, Calendar, Flag, ListChecks, MessageSquare, Pencil, PlusCircle, UserRound } from 'lucide-react';
+import React, { useState } from 'react';
+import { Activity, ArrowLeftRight, Calendar, Download, FileText, Flag, ListChecks, MessageSquare, Paperclip, Pencil, PlusCircle, Trash2, UserRound } from 'lucide-react';
+import AttachmentDeleteDialog from '../components/AttachmentDeleteDialog.jsx';
+import CommentDeleteDialog from '../components/CommentDeleteDialog.jsx';
+import UserAvatar from '../components/UserAvatar.jsx';
 
 const activityIcons = {
   created: PlusCircle,
   updated: Pencil,
   moved: ArrowLeftRight,
-  commented: MessageSquare
+  commented: MessageSquare,
+  comment_updated: Pencil,
+  comment_deleted: Trash2,
+  attachment_added: Paperclip,
+  attachment_deleted: Trash2
 };
+
+function formatFileSize(size) {
+  if (size < 1024) return `${size} بايت`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} كيلوبايت`;
+  return `${(size / (1024 * 1024)).toFixed(1)} ميجابايت`;
+}
 
 function activityDescription(activity) {
   if (activity.action === 'created') return 'أنشأ البطاقة';
@@ -17,6 +30,10 @@ function activityDescription(activity) {
       : 'نقل البطاقة إلى عمود آخر';
   }
   if (activity.action === 'commented') return 'أضاف تعليقاً جديداً';
+  if (activity.action === 'comment_updated') return 'عدّل تعليقاً';
+  if (activity.action === 'comment_deleted') return 'حذف تعليقاً';
+  if (activity.action === 'attachment_added') return `أضاف المرفق «${activity.metadata?.fileName || 'ملف'}»`;
+  if (activity.action === 'attachment_deleted') return `حذف المرفق «${activity.metadata?.fileName || 'ملف'}»`;
   return 'أجرى تغييراً على البطاقة';
 }
 
@@ -36,9 +53,14 @@ function TaskDetailsPage({
   isSavingCardDetails,
   cardDetailsError,
   comments,
+  attachments,
   cardActivity,
   commentBody,
   isAddingComment,
+  updatingCommentId,
+  deletingCommentId,
+  isUploadingAttachment,
+  deletingAttachmentId,
   user,
   setCardDetailsForm,
   setCommentBody,
@@ -51,8 +73,46 @@ function TaskDetailsPage({
   removeChecklistItem,
   handleSaveCardDetails,
   handleAddComment,
+  handleUpdateComment,
+  handleDeleteComment,
+  handleUploadAttachment,
+  handleDownloadAttachment,
+  handleDeleteAttachment,
+  canManageAttachments,
   navigateToSection
 }) {
+  const [attachmentToDelete, setAttachmentToDelete] = useState(null);
+  const [commentToDelete, setCommentToDelete] = useState(null);
+  const [editingCommentId, setEditingCommentId] = useState('');
+  const [editingCommentBody, setEditingCommentBody] = useState('');
+
+  async function confirmAttachmentDelete() {
+    if (!attachmentToDelete) return;
+    const deleted = await handleDeleteAttachment(attachmentToDelete);
+    if (deleted) setAttachmentToDelete(null);
+  }
+
+  async function saveEditedComment() {
+    const updated = await handleUpdateComment(editingCommentId, editingCommentBody);
+    if (updated) {
+      setEditingCommentId('');
+      setEditingCommentBody('');
+    }
+  }
+
+  async function confirmCommentDelete() {
+    if (!commentToDelete) return;
+    const deleted = await handleDeleteComment(commentToDelete.id);
+    if (deleted) setCommentToDelete(null);
+  }
+
+  function addMention(member) {
+    const mention = `@${member.name}`;
+    setCommentBody((currentBody) => currentBody.includes(mention)
+      ? currentBody
+      : `${currentBody}${currentBody && !currentBody.endsWith(' ') ? ' ' : ''}${mention} `);
+  }
+
   return (
     selectedCardId ? (
                 <aside className="card-details task-details-page" aria-label="Card details">
@@ -305,6 +365,44 @@ function TaskDetailsPage({
                             </div>
                           )}
                         </section>
+                        <section className="attachments-panel" aria-label="مرفقات البطاقة">
+                          <div className="attachments-heading">
+                            <div><Paperclip size={18} /><h4>المرفقات</h4></div>
+                            <span>{attachments.length}</span>
+                          </div>
+                          {canManageAttachments ? (
+                            <label className={`attachment-upload ${isUploadingAttachment ? 'is-loading' : ''}`}>
+                              <Paperclip size={17} />
+                              <span>{isUploadingAttachment ? 'جاري رفع الملف...' : 'إضافة مرفق'}</span>
+                              <input
+                                type="file"
+                                onChange={handleUploadAttachment}
+                                disabled={isUploadingAttachment}
+                                accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain,text/csv,application/json,application/zip,.doc,.docx,.xls,.xlsx"
+                              />
+                            </label>
+                          ) : null}
+                          <small>الحد الأقصى للملف 5 ميجابايت.</small>
+                          {attachments.length === 0 ? (
+                            <p className="column-empty">لا توجد مرفقات لهذه البطاقة بعد.</p>
+                          ) : (
+                            <div className="attachments-list">
+                              {attachments.map((attachment) => (
+                                <article key={attachment.id} className="attachment-item">
+                                  <span className="attachment-file-icon"><FileText size={19} /></span>
+                                  <div>
+                                    <strong title={attachment.name}>{attachment.name}</strong>
+                                    <small>{formatFileSize(attachment.size)} · {attachment.uploaderName || 'مستخدم'}</small>
+                                  </div>
+                                  <button type="button" className="attachment-action" onClick={() => handleDownloadAttachment(attachment)} title="تنزيل"><Download size={17} /></button>
+                                  {canManageAttachments ? (
+                                    <button type="button" className="attachment-action delete" onClick={() => setAttachmentToDelete(attachment)} disabled={deletingAttachmentId === attachment.id} title="حذف"><Trash2 size={17} /></button>
+                                  ) : null}
+                                </article>
+                              ))}
+                            </div>
+                          )}
+                        </section>
                         <button type="submit" disabled={isSavingCardDetails || !canSaveSelectedCard}>
                           {isSavingCardDetails ? 'جاري الحفظ...' : 'حفظ التفاصيل'}
                         </button>
@@ -337,7 +435,10 @@ function TaskDetailsPage({
                         </div>
                       </section>
                       <section className="comments-panel" aria-label="Card comments">
-                        <h3>التعليقات</h3>
+                        <div className="comments-heading">
+                          <div><MessageSquare size={18} /><h3>التعليقات</h3></div>
+                          <span>{comments.length}</span>
+                        </div>
                         <form className="comment-form" onSubmit={handleAddComment}>
                           <textarea
                             value={commentBody}
@@ -345,6 +446,15 @@ function TaskDetailsPage({
                             placeholder="اكتب تعليقاً"
                             rows="3"
                           />
+                          <div className="mention-suggestions" aria-label="الإشارة إلى عضو">
+                            <small>إشارة إلى:</small>
+                            {boardMembers.filter((member) => member.id !== user?.id).map((member) => (
+                              <button key={member.id} type="button" onClick={() => addMention(member)}>
+                                <UserAvatar src={member.avatarUrl} name={member.name} />
+                                @{member.name}
+                              </button>
+                            ))}
+                          </div>
                           <button type="submit" disabled={isAddingComment}>
                             {isAddingComment ? 'جاري الإضافة...' : 'إضافة تعليق'}
                           </button>
@@ -356,11 +466,23 @@ function TaskDetailsPage({
                           ) : (
                             comments.map((comment) => (
                               <article key={comment.id} className="comment-card">
-                                <strong>{comment.authorName}</strong>
-                                <p>{comment.body}</p>
-                                <time dateTime={comment.createdAt}>
-                                  {new Date(comment.createdAt).toLocaleString('ar')}
-                                </time>
+                                <header className="comment-card-header">
+                                  <UserAvatar src={comment.authorAvatarUrl} name={comment.authorName} fallbackLength={2} className="comment-author-avatar" />
+                                  <div><strong>{comment.authorName}</strong><time dateTime={comment.createdAt}>{new Date(comment.createdAt).toLocaleString('ar')}{comment.editedAt ? ' · تم التعديل' : ''}</time></div>
+                                  <div className="comment-actions">
+                                    {comment.userId === user?.id ? <button type="button" onClick={() => { setEditingCommentId(comment.id); setEditingCommentBody(comment.body); }} title="تعديل"><Pencil size={15} /></button> : null}
+                                    {(comment.userId === user?.id || canDeleteSelectedCard) ? <button type="button" className="delete" onClick={() => setCommentToDelete(comment)} title="حذف"><Trash2 size={15} /></button> : null}
+                                  </div>
+                                </header>
+                                {editingCommentId === comment.id ? (
+                                  <div className="comment-edit-form">
+                                    <textarea value={editingCommentBody} onChange={(event) => setEditingCommentBody(event.target.value)} rows="3" autoFocus />
+                                    <div>
+                                      <button type="button" className="secondary-button" onClick={() => { setEditingCommentId(''); setEditingCommentBody(''); }} disabled={updatingCommentId === comment.id}>إلغاء</button>
+                                      <button type="button" onClick={saveEditedComment} disabled={!editingCommentBody.trim() || updatingCommentId === comment.id}>{updatingCommentId === comment.id ? 'جاري الحفظ...' : 'حفظ التعديل'}</button>
+                                    </div>
+                                  </div>
+                                ) : <p>{comment.body}</p>}
                               </article>
                             ))
                           )}
@@ -368,6 +490,22 @@ function TaskDetailsPage({
                       </section>
                         </aside>
                       </div>
+                      {attachmentToDelete ? (
+                        <AttachmentDeleteDialog
+                          attachment={attachmentToDelete}
+                          isDeleting={deletingAttachmentId === attachmentToDelete.id}
+                          onCancel={() => setAttachmentToDelete(null)}
+                          onConfirm={confirmAttachmentDelete}
+                        />
+                      ) : null}
+                      {commentToDelete ? (
+                        <CommentDeleteDialog
+                          comment={commentToDelete}
+                          isDeleting={deletingCommentId === commentToDelete.id}
+                          onCancel={() => setCommentToDelete(null)}
+                          onConfirm={confirmCommentDelete}
+                        />
+                      ) : null}
                     </>
                   ) : null}
                 </aside>

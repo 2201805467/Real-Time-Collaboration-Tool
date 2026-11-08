@@ -2,8 +2,10 @@ import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
 import { randomUUID } from 'crypto';
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'fs';
+import { basename, join } from 'path';
 import { Server } from 'socket.io';
-import { db, getDatabaseSummary } from './db.js';
+import { db, getDatabaseSummary, storageDir } from './db.js';
 import { createToken, getPublicUser, hashPassword, requireAuth, verifyPassword, verifyToken } from './auth.js';
 
 const app = express();
@@ -17,6 +19,19 @@ const io = new Server(httpServer, {
   }
 });
 const boardPresence = new Map();
+const uploadsDir = join(storageDir, 'uploads');
+const maxAttachmentSize = 5 * 1024 * 1024;
+const allowedAttachmentTypes = new Set([
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+  'application/pdf', 'text/plain', 'text/csv', 'application/json',
+  'application/zip',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+]);
+
+mkdirSync(uploadsDir, { recursive: true });
 
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
@@ -213,9 +228,37 @@ function serializeCard(card) {
     priority: card.priority || 'normal',
     tags: parseJsonList(card.tags),
     checklist: normalizeChecklist(checklist),
+    attachmentCount: Number(card.attachmentCount || 0),
+    commentCount: Number(card.commentCount || 0),
     completedChecklistItems,
     checklistTotal: checklist.length
   };
+}
+
+function getAttachmentsForCard(cardId) {
+  return db.prepare(`
+    SELECT
+      attachments.id,
+      attachments.card_id AS cardId,
+      attachments.original_name AS name,
+      attachments.mime_type AS mimeType,
+      attachments.size,
+      attachments.created_at AS createdAt,
+      attachments.user_id AS uploadedBy,
+      users.name AS uploaderName,
+      users.avatar_url AS uploaderAvatarUrl
+    FROM attachments
+    LEFT JOIN users ON users.id = attachments.user_id
+    WHERE attachments.card_id = ?
+    ORDER BY attachments.created_at DESC, attachments.rowid DESC
+  `).all(cardId);
+}
+
+function deleteStoredAttachments(attachments) {
+  attachments.forEach((attachment) => {
+    const filePath = join(uploadsDir, attachment.storedName);
+    if (existsSync(filePath)) unlinkSync(filePath);
+  });
 }
 
 app.get('/api/health', (req, res) => {
@@ -488,7 +531,7 @@ function createNotification({ userId, boardId, actorId, type, entityType, entity
     SELECT notify_assignments AS assignments, notify_comments AS comments
     FROM users WHERE id = ?
   `).get(userId);
-  const isCommentNotification = type === 'card_commented';
+  const isCommentNotification = type === 'card_commented' || type === 'comment_mentioned';
 
   if (!preferences || (isCommentNotification ? !preferences.comments : !preferences.assignments)) {
     return null;
@@ -633,6 +676,8 @@ function getCardForBoard(cardId, boardId) {
         cards.assignee_id AS assigneeId,
         assignee.name AS assigneeName,
         assignee.avatar_url AS assigneeAvatarUrl,
+        (SELECT COUNT(*) FROM attachments WHERE attachments.card_id = cards.id) AS attachmentCount,
+        (SELECT COUNT(*) FROM comments WHERE comments.card_id = cards.id) AS commentCount,
         cards.due_date AS dueDate,
         cards.priority,
         cards.tags,
@@ -678,6 +723,13 @@ function getBoardMembers(boardId) {
     .all(boardId);
 }
 
+function getMentionedMembers(boardId, body, excludedUserId) {
+  const normalizedBody = String(body || '').toLocaleLowerCase();
+  return getBoardMembers(boardId).filter((member) => (
+    member.id !== excludedUserId && normalizedBody.includes(`@${member.name.toLocaleLowerCase()}`)
+  ));
+}
+
 function getCommentsForCard(cardId) {
   return db
     .prepare(`
@@ -689,7 +741,8 @@ function getCommentsForCard(cardId) {
         users.avatar_url AS authorAvatarUrl,
         comments.body,
         comments.created_at AS createdAt,
-        comments.updated_at AS updatedAt
+        comments.updated_at AS updatedAt,
+        comments.edited_at AS editedAt
       FROM comments
       INNER JOIN users ON users.id = comments.user_id
       WHERE comments.card_id = ?
@@ -924,7 +977,15 @@ app.delete('/api/boards/:boardId', requireAuth, (req, res) => {
     return;
   }
 
+  const storedAttachments = db.prepare(`
+    SELECT attachments.stored_name AS storedName
+    FROM attachments
+    INNER JOIN cards ON cards.id = attachments.card_id
+    INNER JOIN board_columns ON board_columns.id = cards.column_id
+    WHERE board_columns.board_id = ?
+  `).all(board.id);
   db.prepare('DELETE FROM boards WHERE id = ?').run(board.id);
+  deleteStoredAttachments(storedAttachments);
 
   io.to(`board:${board.id}`).emit('board:deleted', {
     boardId: board.id
@@ -1096,6 +1157,8 @@ app.get('/api/boards/:boardId', requireAuth, (req, res) => {
         cards.assignee_id AS assigneeId,
         assignee.name AS assigneeName,
         assignee.avatar_url AS assigneeAvatarUrl,
+        (SELECT COUNT(*) FROM attachments WHERE attachments.card_id = cards.id) AS attachmentCount,
+        (SELECT COUNT(*) FROM comments WHERE comments.card_id = cards.id) AS commentCount,
         cards.due_date AS dueDate,
         cards.priority,
         cards.tags,
@@ -1424,6 +1487,8 @@ app.post('/api/boards/:boardId/columns/:columnId/cards', requireAuth, (req, res)
         cards.assignee_id AS assigneeId,
         assignee.name AS assigneeName,
         assignee.avatar_url AS assigneeAvatarUrl,
+        (SELECT COUNT(*) FROM attachments WHERE attachments.card_id = cards.id) AS attachmentCount,
+        (SELECT COUNT(*) FROM comments WHERE comments.card_id = cards.id) AS commentCount,
         cards.due_date AS dueDate,
         cards.priority,
         cards.tags,
@@ -1551,6 +1616,8 @@ app.patch('/api/boards/:boardId/cards/:cardId/move', requireAuth, (req, res) => 
         cards.assignee_id AS assigneeId,
         assignee.name AS assigneeName,
         assignee.avatar_url AS assigneeAvatarUrl,
+        (SELECT COUNT(*) FROM attachments WHERE attachments.card_id = cards.id) AS attachmentCount,
+        (SELECT COUNT(*) FROM comments WHERE comments.card_id = cards.id) AS commentCount,
         cards.due_date AS dueDate,
         cards.priority,
         cards.tags,
@@ -1595,8 +1662,147 @@ app.get('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
   res.json({
     card,
     comments: getCommentsForCard(card.id),
-    activity: getActivityForCard(card.id, board.id)
+    activity: getActivityForCard(card.id, board.id),
+    attachments: getAttachmentsForCard(card.id)
   });
+});
+
+app.post(
+  '/api/boards/:boardId/cards/:cardId/attachments',
+  requireAuth,
+  express.raw({ type: 'application/octet-stream', limit: '5mb' }),
+  (req, res) => {
+    const board = getBoardForUser(req.params.boardId, req.user.id);
+    const card = board ? getCardForBoard(req.params.cardId, board.id) : null;
+
+    if (!board || !card) {
+      return res.status(404).json({ message: 'Card not found' });
+    }
+
+    if (!isOwner(board) && !isCardManager(card, req.user.id)) {
+      return res.status(403).json({ message: 'Only the owner or assigned manager can upload attachments' });
+    }
+
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+      return res.status(400).json({ message: 'Attachment file is required' });
+    }
+
+    if (req.body.length > maxAttachmentSize) {
+      return res.status(413).json({ message: 'Attachment must not exceed 5 MB' });
+    }
+
+    let originalName;
+    try {
+      originalName = decodeURIComponent(String(req.headers['x-file-name'] || ''));
+    } catch {
+      return res.status(400).json({ message: 'Invalid attachment name' });
+    }
+    originalName = basename(originalName.replace(/\\/g, '/')).replace(/[\u0000-\u001f]/g, '').trim().slice(0, 180);
+    const mimeType = String(req.headers['x-file-type'] || '').toLowerCase();
+
+    if (!originalName) {
+      return res.status(400).json({ message: 'Attachment name is required' });
+    }
+
+    if (!allowedAttachmentTypes.has(mimeType)) {
+      return res.status(400).json({ message: 'This attachment type is not supported' });
+    }
+
+    const attachmentId = randomUUID();
+    const storedName = attachmentId;
+    const filePath = join(uploadsDir, storedName);
+
+    writeFileSync(filePath, req.body, { flag: 'wx' });
+    try {
+      db.prepare(`
+        INSERT INTO attachments (id, card_id, user_id, original_name, stored_name, mime_type, size)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(attachmentId, card.id, req.user.id, originalName, storedName, mimeType, req.body.length);
+    } catch (error) {
+      if (existsSync(filePath)) unlinkSync(filePath);
+      throw error;
+    }
+
+    logActivity(board.id, req.user.id, 'attachment_added', 'card', card.id, {
+      attachmentId,
+      fileName: originalName
+    });
+    const attachment = getAttachmentsForCard(card.id).find((item) => item.id === attachmentId);
+    const attachmentCount = db.prepare('SELECT COUNT(*) AS count FROM attachments WHERE card_id = ?').get(card.id).count;
+    const activity = getActivityForCard(card.id, board.id);
+
+    io.to(`board:${board.id}`).emit('board:attachment-created', {
+      boardId: board.id,
+      cardId: card.id,
+      attachment,
+      attachmentCount,
+      activity: activity[0]
+    });
+    res.status(201).json({ attachment, attachmentCount, activity });
+  }
+);
+
+app.get('/api/boards/:boardId/cards/:cardId/attachments/:attachmentId/download', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+  const card = board ? getCardForBoard(req.params.cardId, board.id) : null;
+
+  if (!board || !card) {
+    return res.status(404).json({ message: 'Card not found' });
+  }
+
+  const attachment = db.prepare(`
+    SELECT original_name AS name, stored_name AS storedName, mime_type AS mimeType
+    FROM attachments WHERE id = ? AND card_id = ?
+  `).get(req.params.attachmentId, card.id);
+
+  if (!attachment || !existsSync(join(uploadsDir, attachment.storedName))) {
+    return res.status(404).json({ message: 'Attachment not found' });
+  }
+
+  res.type(attachment.mimeType);
+  return res.download(join(uploadsDir, attachment.storedName), attachment.name);
+});
+
+app.delete('/api/boards/:boardId/cards/:cardId/attachments/:attachmentId', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+  const card = board ? getCardForBoard(req.params.cardId, board.id) : null;
+
+  if (!board || !card) {
+    return res.status(404).json({ message: 'Card not found' });
+  }
+
+  if (!isOwner(board) && !isCardManager(card, req.user.id)) {
+    return res.status(403).json({ message: 'Only the owner or assigned manager can delete attachments' });
+  }
+
+  const attachment = db.prepare(`
+    SELECT id, original_name AS name, stored_name AS storedName
+    FROM attachments WHERE id = ? AND card_id = ?
+  `).get(req.params.attachmentId, card.id);
+
+  if (!attachment) {
+    return res.status(404).json({ message: 'Attachment not found' });
+  }
+
+  db.prepare('DELETE FROM attachments WHERE id = ?').run(attachment.id);
+  const filePath = join(uploadsDir, attachment.storedName);
+  if (existsSync(filePath)) unlinkSync(filePath);
+
+  logActivity(board.id, req.user.id, 'attachment_deleted', 'card', card.id, {
+    attachmentId: attachment.id,
+    fileName: attachment.name
+  });
+  const attachmentCount = db.prepare('SELECT COUNT(*) AS count FROM attachments WHERE card_id = ?').get(card.id).count;
+  const activity = getActivityForCard(card.id, board.id);
+
+  io.to(`board:${board.id}`).emit('board:attachment-deleted', {
+    boardId: board.id,
+    cardId: card.id,
+    attachmentId: attachment.id,
+    attachmentCount,
+    activity: activity[0]
+  });
+  res.json({ attachmentId: attachment.id, attachmentCount, activity });
 });
 
 app.patch('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
@@ -1748,6 +1954,10 @@ app.post('/api/boards/:boardId/cards/:cardId/comments', requireAuth, (req, res) 
     return res.status(400).json({ message: 'Comment body is required' });
   }
 
+  if (body.length > 2000) {
+    return res.status(400).json({ message: 'Comment must not exceed 2000 characters' });
+  }
+
   const commentId = randomUUID();
 
   db.prepare('INSERT INTO comments (id, card_id, user_id, body) VALUES (?, ?, ?, ?)')
@@ -1755,6 +1965,8 @@ app.post('/api/boards/:boardId/cards/:cardId/comments', requireAuth, (req, res) 
   db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
   logActivity(board.id, req.user.id, 'commented', 'card', card.id, { title: card.title });
 
+  const mentionedMembers = getMentionedMembers(board.id, body, req.user.id);
+  const mentionedMemberIds = new Set(mentionedMembers.map((member) => member.id));
   const commentRecipients = new Set([
     card.assigneeId,
     ...(card.checklist || []).map((item) => item.assigneeId)
@@ -1762,6 +1974,7 @@ app.post('/api/boards/:boardId/cards/:cardId/comments', requireAuth, (req, res) 
   commentRecipients.delete(null);
   commentRecipients.delete('');
   commentRecipients.delete(req.user.id);
+  mentionedMemberIds.forEach((userId) => commentRecipients.delete(userId));
   commentRecipients.forEach((userId) => {
     createNotification({
       userId,
@@ -1774,17 +1987,119 @@ app.post('/api/boards/:boardId/cards/:cardId/comments', requireAuth, (req, res) 
     });
   });
 
+  mentionedMembers.forEach((member) => {
+    createNotification({
+      userId: member.id,
+      boardId: board.id,
+      actorId: req.user.id,
+      type: 'comment_mentioned',
+      entityType: 'card',
+      entityId: card.id,
+      message: `${req.user.name} أشار إليك في تعليق على البطاقة «${card.title}»`
+    });
+  });
+
   const comment = getCommentsForCard(card.id).find((item) => item.id === commentId);
+  const commentCount = db.prepare('SELECT COUNT(*) AS count FROM comments WHERE card_id = ?').get(card.id).count;
   const activity = getActivityForCard(card.id, board.id);
 
   io.to(`board:${board.id}`).emit('board:comment-created', {
     boardId: board.id,
     cardId: card.id,
     comment,
+    commentCount,
     activity: activity[0]
   });
 
-  res.status(201).json({ comment, activity });
+  res.status(201).json({ comment, commentCount, activity });
+});
+
+app.patch('/api/boards/:boardId/cards/:cardId/comments/:commentId', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+  const card = board ? getCardForBoard(req.params.cardId, board.id) : null;
+
+  if (!board || !card) {
+    return res.status(404).json({ message: 'Card not found' });
+  }
+
+  const existingComment = db.prepare(`
+    SELECT id, user_id AS userId, body FROM comments WHERE id = ? AND card_id = ?
+  `).get(req.params.commentId, card.id);
+
+  if (!existingComment) {
+    return res.status(404).json({ message: 'Comment not found' });
+  }
+
+  if (existingComment.userId !== req.user.id) {
+    return res.status(403).json({ message: 'You can only edit your own comments' });
+  }
+
+  const body = String(req.body.body || '').trim();
+  if (!body) return res.status(400).json({ message: 'Comment body is required' });
+  if (body.length > 2000) return res.status(400).json({ message: 'Comment must not exceed 2000 characters' });
+
+  db.prepare(`
+    UPDATE comments SET body = ?, updated_at = CURRENT_TIMESTAMP, edited_at = CURRENT_TIMESTAMP WHERE id = ?
+  `).run(body, existingComment.id);
+  logActivity(board.id, req.user.id, 'comment_updated', 'card', card.id, { title: card.title });
+
+  const previousMentionIds = new Set(getMentionedMembers(board.id, existingComment.body, req.user.id).map((member) => member.id));
+  getMentionedMembers(board.id, body, req.user.id)
+    .filter((member) => !previousMentionIds.has(member.id))
+    .forEach((member) => createNotification({
+      userId: member.id,
+      boardId: board.id,
+      actorId: req.user.id,
+      type: 'comment_mentioned',
+      entityType: 'card',
+      entityId: card.id,
+      message: `${req.user.name} أشار إليك في تعليق على البطاقة «${card.title}»`
+    }));
+
+  const comment = getCommentsForCard(card.id).find((item) => item.id === existingComment.id);
+  const activity = getActivityForCard(card.id, board.id);
+  io.to(`board:${board.id}`).emit('board:comment-updated', {
+    boardId: board.id,
+    cardId: card.id,
+    comment,
+    activity: activity[0]
+  });
+  res.json({ comment, activity });
+});
+
+app.delete('/api/boards/:boardId/cards/:cardId/comments/:commentId', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+  const card = board ? getCardForBoard(req.params.cardId, board.id) : null;
+
+  if (!board || !card) {
+    return res.status(404).json({ message: 'Card not found' });
+  }
+
+  const comment = db.prepare(`
+    SELECT id, user_id AS userId FROM comments WHERE id = ? AND card_id = ?
+  `).get(req.params.commentId, card.id);
+
+  if (!comment) {
+    return res.status(404).json({ message: 'Comment not found' });
+  }
+
+  if (comment.userId !== req.user.id && !isOwner(board)) {
+    return res.status(403).json({ message: 'You can only delete your own comments' });
+  }
+
+  db.prepare('DELETE FROM comments WHERE id = ?').run(comment.id);
+  logActivity(board.id, req.user.id, 'comment_deleted', 'card', card.id, { title: card.title });
+  const commentCount = db.prepare('SELECT COUNT(*) AS count FROM comments WHERE card_id = ?').get(card.id).count;
+  const activity = getActivityForCard(card.id, board.id);
+
+  io.to(`board:${board.id}`).emit('board:comment-deleted', {
+    boardId: board.id,
+    cardId: card.id,
+    commentId: comment.id,
+    commentCount,
+    activity: activity[0]
+  });
+  res.json({ commentId: comment.id, commentCount, activity });
 });
 
 app.delete('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
@@ -1803,6 +2118,12 @@ app.delete('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
   if (!requireOwner(board, res)) {
     return;
   }
+
+  const storedAttachments = db.prepare(`
+    SELECT stored_name AS storedName FROM attachments WHERE card_id = ?
+  `).all(card.id);
+  db.prepare('DELETE FROM attachments WHERE card_id = ?').run(card.id);
+  deleteStoredAttachments(storedAttachments);
 
   db.prepare(`
     UPDATE cards
@@ -1916,6 +2237,10 @@ app.use((error, req, res, next) => {
 
   if (res.headersSent) {
     return next(error);
+  }
+
+  if (error.type === 'entity.too.large') {
+    return res.status(413).json({ message: 'Attachment must not exceed 5 MB' });
   }
 
   return res.status(500).json({ message: 'Internal server error' });

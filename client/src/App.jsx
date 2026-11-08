@@ -172,6 +172,11 @@ function App() {
   const [isLoadingCardDetails, setIsLoadingCardDetails] = useState(false);
   const [isSavingCardDetails, setIsSavingCardDetails] = useState(false);
   const [isAddingComment, setIsAddingComment] = useState(false);
+  const [updatingCommentId, setUpdatingCommentId] = useState('');
+  const [deletingCommentId, setDeletingCommentId] = useState('');
+  const [attachments, setAttachments] = useState([]);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const [deletingAttachmentId, setDeletingAttachmentId] = useState('');
 
   useEffect(() => {
     if (!user) {
@@ -327,6 +332,7 @@ function App() {
     }
 
     function handleCommentCreated(payload) {
+      syncCommentCount(payload.cardId, payload.commentCount);
       if (selectedCardId === payload.cardId) {
         mergeCardActivity(payload.activity);
       }
@@ -341,6 +347,59 @@ function App() {
 
         return [...currentComments, payload.comment];
       });
+    }
+
+    function syncCommentCount(cardId, commentCount) {
+      setColumns((currentColumns) => currentColumns.map((column) => ({
+        ...column,
+        cards: column.cards.map((card) => card.id === cardId ? { ...card, commentCount } : card)
+      })));
+      setSelectedCard((currentCard) => currentCard?.id === cardId
+        ? { ...currentCard, commentCount }
+        : currentCard);
+    }
+
+    function handleCommentUpdated(payload) {
+      if (selectedCardId !== payload.cardId) return;
+      setComments((currentComments) => currentComments.map((comment) =>
+        comment.id === payload.comment.id ? payload.comment : comment
+      ));
+      mergeCardActivity(payload.activity);
+    }
+
+    function handleCommentDeleted(payload) {
+      syncCommentCount(payload.cardId, payload.commentCount);
+      if (selectedCardId !== payload.cardId) return;
+      setComments((currentComments) => currentComments.filter((comment) => comment.id !== payload.commentId));
+      mergeCardActivity(payload.activity);
+    }
+
+    function syncAttachmentCount(cardId, attachmentCount) {
+      setColumns((currentColumns) => currentColumns.map((column) => ({
+        ...column,
+        cards: column.cards.map((card) => card.id === cardId ? { ...card, attachmentCount } : card)
+      })));
+      setSelectedCard((currentCard) => currentCard?.id === cardId
+        ? { ...currentCard, attachmentCount }
+        : currentCard);
+    }
+
+    function handleAttachmentCreated(payload) {
+      syncAttachmentCount(payload.cardId, payload.attachmentCount);
+      if (selectedCardId !== payload.cardId) return;
+
+      setAttachments((currentAttachments) => currentAttachments.some((item) => item.id === payload.attachment.id)
+        ? currentAttachments
+        : [payload.attachment, ...currentAttachments]);
+      mergeCardActivity(payload.activity);
+    }
+
+    function handleAttachmentDeleted(payload) {
+      syncAttachmentCount(payload.cardId, payload.attachmentCount);
+      if (selectedCardId !== payload.cardId) return;
+
+      setAttachments((currentAttachments) => currentAttachments.filter((item) => item.id !== payload.attachmentId));
+      mergeCardActivity(payload.activity);
     }
 
     function handleCardDeleted(payload) {
@@ -462,6 +521,10 @@ function App() {
       'board:member-removed': handleMemberRemoved,
       'board:member-updated': handleMemberUpdated,
       'board:comment-created': handleCommentCreated,
+      'board:comment-updated': handleCommentUpdated,
+      'board:comment-deleted': handleCommentDeleted,
+      'board:attachment-created': handleAttachmentCreated,
+      'board:attachment-deleted': handleAttachmentDeleted,
       'board:access-revoked': handleAccessRevoked,
       'board:presence': handlePresenceUpdated,
       'notification:created': handleNotificationCreated
@@ -1020,6 +1083,7 @@ function App() {
     setSelectedCardId(cardId);
     setSelectedCard(null);
     setComments([]);
+    setAttachments([]);
     setCardActivity([]);
     setCardDetailsError('');
     setActiveSidebarSection('task');
@@ -1039,6 +1103,7 @@ function App() {
         checklist: data.card.checklist || []
       });
       setComments(data.comments);
+      setAttachments(data.attachments || []);
       setCardActivity(data.activity || []);
     } catch (error) {
       setCardDetailsError(error.message);
@@ -1051,6 +1116,7 @@ function App() {
     setSelectedCardId('');
     setSelectedCard(null);
     setComments([]);
+    setAttachments([]);
     setCardActivity([]);
     setCommentBody('');
     setCardDetailsError('');
@@ -1190,6 +1256,7 @@ function App() {
           ? currentComments
           : [...currentComments, data.comment]
       );
+      syncCommentCount(selectedCardId, data.commentCount);
       setCardActivity(data.activity || []);
       loadWorkspaceOverview();
       setCommentBody('');
@@ -1197,6 +1264,100 @@ function App() {
       setCardDetailsError(error.message);
     } finally {
       setIsAddingComment(false);
+    }
+  }
+
+  async function handleUpdateComment(commentId, body) {
+    const nextBody = body.trim();
+    if (!nextBody) return false;
+
+    setCardDetailsError('');
+    setUpdatingCommentId(commentId);
+    try {
+      const data = await boardApi.updateComment(selectedBoardId, selectedCardId, commentId, nextBody, token);
+      setComments((currentComments) => currentComments.map((comment) =>
+        comment.id === commentId ? data.comment : comment
+      ));
+      setCardActivity(data.activity || []);
+      return true;
+    } catch (error) {
+      setCardDetailsError(error.message);
+      return false;
+    } finally {
+      setUpdatingCommentId('');
+    }
+  }
+
+  async function handleDeleteComment(commentId) {
+    setCardDetailsError('');
+    setDeletingCommentId(commentId);
+    try {
+      const data = await boardApi.removeComment(selectedBoardId, selectedCardId, commentId, token);
+      setComments((currentComments) => currentComments.filter((comment) => comment.id !== commentId));
+      syncCommentCount(selectedCardId, data.commentCount);
+      setCardActivity(data.activity || []);
+      return true;
+    } catch (error) {
+      setCardDetailsError(error.message);
+      return false;
+    } finally {
+      setDeletingCommentId('');
+    }
+  }
+
+  async function handleUploadAttachment(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !selectedCardId) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setCardDetailsError('حجم المرفق يجب ألا يتجاوز 5 ميجابايت.');
+      return;
+    }
+
+    setCardDetailsError('');
+    setIsUploadingAttachment(true);
+    try {
+      const data = await boardApi.uploadAttachment(selectedBoardId, selectedCardId, file, token);
+      setAttachments((currentAttachments) => currentAttachments.some((item) => item.id === data.attachment.id)
+        ? currentAttachments
+        : [data.attachment, ...currentAttachments]);
+      syncAttachmentCount(selectedCardId, data.attachmentCount);
+      setCardActivity(data.activity || []);
+    } catch (error) {
+      const messages = {
+        'This attachment type is not supported': 'نوع هذا الملف غير مدعوم.',
+        'Attachment must not exceed 5 MB': 'حجم المرفق يجب ألا يتجاوز 5 ميجابايت.'
+      };
+      setCardDetailsError(messages[error.message] || error.message);
+    } finally {
+      setIsUploadingAttachment(false);
+    }
+  }
+
+  async function handleDownloadAttachment(attachment) {
+    setCardDetailsError('');
+    try {
+      await boardApi.downloadAttachment(selectedBoardId, selectedCardId, attachment, token);
+    } catch (error) {
+      setCardDetailsError(error.message);
+    }
+  }
+
+  async function handleDeleteAttachment(attachment) {
+    setCardDetailsError('');
+    setDeletingAttachmentId(attachment.id);
+    try {
+      const data = await boardApi.removeAttachment(selectedBoardId, selectedCardId, attachment.id, token);
+      setAttachments((currentAttachments) => currentAttachments.filter((item) => item.id !== attachment.id));
+      syncAttachmentCount(selectedCardId, data.attachmentCount);
+      setCardActivity(data.activity || []);
+      return true;
+    } catch (error) {
+      setCardDetailsError(error.message);
+      return false;
+    } finally {
+      setDeletingAttachmentId('');
     }
   }
 
@@ -1466,7 +1627,11 @@ function App() {
                     <span className="presence-label">{presenceUsers.length} متصل الآن</span>
                   ) : null}
                 </div>
-                <button type="button" className="secondary-button" onClick={() => closeBoard()}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => (activeSidebarSection === 'task' && selectedCardId ? closeCard() : closeBoard())}
+                >
                   رجوع
                 </button>
               </div>
@@ -1567,9 +1732,14 @@ function App() {
                   isSavingCardDetails={isSavingCardDetails}
                   cardDetailsError={cardDetailsError}
                   comments={comments}
+                  attachments={attachments}
                   cardActivity={cardActivity}
                   commentBody={commentBody}
                   isAddingComment={isAddingComment}
+                  updatingCommentId={updatingCommentId}
+                  deletingCommentId={deletingCommentId}
+                  isUploadingAttachment={isUploadingAttachment}
+                  deletingAttachmentId={deletingAttachmentId}
                   user={user}
                   setCardDetailsForm={setCardDetailsForm}
                   setCommentBody={setCommentBody}
@@ -1582,6 +1752,12 @@ function App() {
                   removeChecklistItem={removeChecklistItem}
                   handleSaveCardDetails={handleSaveCardDetails}
                   handleAddComment={handleAddComment}
+                  handleUpdateComment={handleUpdateComment}
+                  handleDeleteComment={handleDeleteComment}
+                  handleUploadAttachment={handleUploadAttachment}
+                  handleDownloadAttachment={handleDownloadAttachment}
+                  handleDeleteAttachment={handleDeleteAttachment}
+                  canManageAttachments={canEditSelectedSubtasks}
                   navigateToSection={navigateToSection}
                 />
               ) : null}

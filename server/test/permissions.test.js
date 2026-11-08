@@ -82,6 +82,21 @@ async function api(path, { token, method = 'GET', body } = {}) {
   return { status: response.status, data };
 }
 
+async function attachmentApi(path, { token, method = 'POST', body, name = 'notes.txt', type = 'text/plain' } = {}) {
+  const response = await fetch(`${baseUrl}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/octet-stream',
+      'X-File-Name': encodeURIComponent(name),
+      'X-File-Type': type
+    },
+    body
+  });
+  const data = await response.json();
+  return { status: response.status, data };
+}
+
 async function register(name, email) {
   const result = await api('/api/auth/register', {
     method: 'POST',
@@ -269,6 +284,38 @@ test('owner, manager, and member permissions follow the project hierarchy', asyn
   });
   assert.equal(assignedCard.status, 200);
 
+  const memberCannotUploadAttachment = await attachmentApi(`/api/boards/${boardId}/cards/${cardId}/attachments`, {
+    token: member.token,
+    body: Buffer.from('member file')
+  });
+  assert.equal(memberCannotUploadAttachment.status, 403);
+
+  const managerAttachment = await attachmentApi(`/api/boards/${boardId}/cards/${cardId}/attachments`, {
+    token: manager.token,
+    body: Buffer.from('attachment contents')
+  });
+  assert.equal(managerAttachment.status, 201);
+  assert.equal(managerAttachment.data.attachment.name, 'notes.txt');
+  assert.equal(managerAttachment.data.attachmentCount, 1);
+
+  const memberDownload = await fetch(
+    `${baseUrl}/api/boards/${boardId}/cards/${cardId}/attachments/${managerAttachment.data.attachment.id}/download`,
+    { headers: { Authorization: `Bearer ${member.token}` } }
+  );
+  assert.equal(memberDownload.status, 200);
+  assert.equal(await memberDownload.text(), 'attachment contents');
+
+  const cardWithAttachment = await api(`/api/boards/${boardId}/cards/${cardId}`, { token: owner.token });
+  assert.equal(cardWithAttachment.data.card.attachmentCount, 1);
+  assert.equal(cardWithAttachment.data.attachments.length, 1);
+
+  const managerDeletesAttachment = await api(
+    `/api/boards/${boardId}/cards/${cardId}/attachments/${managerAttachment.data.attachment.id}`,
+    { method: 'DELETE', token: manager.token }
+  );
+  assert.equal(managerDeletesAttachment.status, 200);
+  assert.equal(managerDeletesAttachment.data.attachmentCount, 0);
+
   const memberCannotEditCard = await api(`/api/boards/${boardId}/cards/${cardId}`, {
     method: 'PATCH',
     token: member.token,
@@ -307,12 +354,37 @@ test('owner, manager, and member permissions follow the project hierarchy', asyn
     body: { body: 'Task completed and reviewed' }
   });
   assert.equal(memberComment.status, 201);
+  assert.equal(memberComment.data.commentCount, 1);
+
+  const managerCannotEditMemberComment = await api(
+    `/api/boards/${boardId}/cards/${cardId}/comments/${memberComment.data.comment.id}`,
+    { method: 'PATCH', token: manager.token, body: { body: 'Changed by manager' } }
+  );
+  assert.equal(managerCannotEditMemberComment.status, 403);
+
+  const memberEditsAndMentionsOwner = await api(
+    `/api/boards/${boardId}/cards/${cardId}/comments/${memberComment.data.comment.id}`,
+    { method: 'PATCH', token: member.token, body: { body: 'Updated comment for @Owner' } }
+  );
+  assert.equal(memberEditsAndMentionsOwner.status, 200);
+  assert.equal(memberEditsAndMentionsOwner.data.comment.body, 'Updated comment for @Owner');
+  assert.ok(memberEditsAndMentionsOwner.data.comment.editedAt);
+
+  const ownerMentionNotifications = await api('/api/notifications', { token: owner.token });
+  assert.ok(ownerMentionNotifications.data.notifications.some((item) => item.type === 'comment_mentioned'));
 
   const managerNotifications = await api('/api/notifications', { token: manager.token });
   assert.equal(managerNotifications.status, 200);
   assert.ok(managerNotifications.data.notifications.some((item) => item.type === 'card_assigned'));
   assert.ok(managerNotifications.data.notifications.some((item) => item.type === 'card_commented'));
   assert.equal(managerNotifications.data.unreadCount, 2);
+
+  const ownerDeletesMemberComment = await api(
+    `/api/boards/${boardId}/cards/${cardId}/comments/${memberComment.data.comment.id}`,
+    { method: 'DELETE', token: owner.token }
+  );
+  assert.equal(ownerDeletesMemberComment.status, 200);
+  assert.equal(ownerDeletesMemberComment.data.commentCount, 0);
 
   const memberNotifications = await api('/api/notifications', { token: member.token });
   assert.equal(memberNotifications.status, 200);

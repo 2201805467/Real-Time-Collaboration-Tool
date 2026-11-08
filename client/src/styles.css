@@ -1386,6 +1386,168 @@ button:disabled {
   backdrop-filter: blur(5px);
 }
 
+.confirm-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(13 16 28 / 0.62);
+  backdrop-filter: blur(8px);
+  animation: confirm-backdrop-in 160ms ease-out;
+}
+
+.confirm-dialog {
+  position: relative;
+  width: min(100%, 440px);
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  padding: 28px;
+  border: 1px solid var(--outline-variant);
+  border-radius: 22px;
+  color: var(--on-surface);
+  background: var(--surface-lowest);
+  box-shadow: 0 28px 90px rgb(8 10 20 / 0.38);
+  text-align: center;
+  animation: confirm-dialog-in 190ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.confirm-dialog-close {
+  position: absolute;
+  top: 14px;
+  inset-inline-end: 14px;
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-color: transparent;
+  color: var(--on-surface-variant);
+  background: var(--surface-container-low);
+}
+
+.confirm-dialog-icon {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border: 8px solid color-mix(in srgb, var(--error-container) 56%, transparent);
+  border-radius: 50%;
+  color: var(--error);
+  background: var(--error-container);
+}
+
+.confirm-dialog-copy {
+  display: grid;
+  gap: 7px;
+}
+
+.confirm-dialog-label {
+  color: var(--error);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.confirm-dialog h2,
+.confirm-dialog p {
+  margin: 0;
+}
+
+.confirm-dialog h2 {
+  font-size: 1.35rem;
+}
+
+.confirm-dialog p {
+  color: var(--on-surface-variant);
+  line-height: 1.7;
+}
+
+.confirm-dialog-file {
+  width: 100%;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--outline-variant);
+  border-radius: 12px;
+  background: var(--surface-container-low);
+  text-align: start;
+}
+
+.confirm-dialog-file > span {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--primary);
+  background: var(--primary-fixed);
+}
+
+.confirm-dialog-file strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.confirm-dialog-comment p {
+  max-height: 88px;
+  overflow: hidden;
+  margin: 0;
+  color: var(--on-surface);
+  line-height: 1.55;
+  text-align: start;
+}
+
+.confirm-dialog-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 10px;
+}
+
+.confirm-dialog-actions button {
+  min-height: 44px;
+  justify-content: center;
+}
+
+.confirm-delete-button {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  border-color: #c83245;
+  color: #ffffff;
+  background: linear-gradient(135deg, #db4052, #b72238);
+  box-shadow: 0 9px 22px rgb(183 34 56 / 0.24);
+}
+
+.confirm-delete-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #e65061, #c12a40);
+  box-shadow: 0 11px 28px rgb(183 34 56 / 0.34);
+}
+
+@keyframes confirm-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes confirm-dialog-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 480px) {
+  .confirm-dialog {
+    padding: 24px 18px 18px;
+  }
+
+  .confirm-dialog-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
 .share-dialog {
   width: min(100%, 680px);
   max-height: min(760px, calc(100vh - 40px));
@@ -1989,6 +2151,192 @@ button:disabled {
   font-size: 1.05rem;
 }
 
+.comments-heading,
+.comments-heading > div,
+.comment-card-header,
+.comment-actions,
+.comment-edit-form > div {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.comments-heading,
+.comment-card-header,
+.comment-edit-form > div {
+  justify-content: space-between;
+}
+
+.comments-heading > span {
+  min-width: 26px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: var(--primary);
+  background: var(--primary-fixed);
+  text-align: center;
+  font-weight: 800;
+}
+
+.mention-suggestions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  overflow-x: auto;
+  padding-bottom: 3px;
+}
+
+.mention-suggestions > small {
+  flex: 0 0 auto;
+  color: var(--on-surface-variant);
+}
+
+.mention-suggestions button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  align-items: center;
+  min-height: 30px;
+  padding: 4px 9px 4px 5px;
+  border-color: var(--outline-variant);
+  border-radius: 999px;
+  color: var(--on-surface);
+  background: var(--surface-container-low);
+  font-size: 0.75rem;
+}
+
+.mention-suggestions .user-avatar {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  color: #ffffff;
+  background: var(--primary-container);
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+
+.attachments-panel {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--outline-variant);
+  border-radius: 13px;
+  background: var(--surface-container-low);
+}
+
+.attachments-heading,
+.attachments-heading > div {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.attachments-heading h4 {
+  margin: 0;
+}
+
+.attachments-heading > span {
+  min-width: 26px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: var(--primary);
+  background: var(--primary-fixed);
+  text-align: center;
+  font-weight: 800;
+}
+
+.attachments-panel > small,
+.attachment-item small {
+  color: var(--on-surface-variant);
+}
+
+.attachment-upload {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px dashed var(--primary-container);
+  border-radius: 10px;
+  color: var(--primary);
+  background: var(--surface-lowest);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.attachment-upload:hover {
+  background: var(--primary-fixed);
+}
+
+.attachment-upload.is-loading {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.attachment-upload input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.attachments-list {
+  display: grid;
+  gap: 8px;
+}
+
+.attachment-item {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 34px 34px;
+  gap: 8px;
+  align-items: center;
+  padding: 9px;
+  border: 1px solid var(--outline-variant);
+  border-radius: 10px;
+  background: var(--surface-lowest);
+}
+
+.attachment-item > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.attachment-item strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-file-icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--primary);
+  background: var(--primary-fixed);
+}
+
+.attachment-action {
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+  color: var(--primary);
+  background: var(--surface-container-low);
+}
+
+.attachment-action.delete {
+  color: var(--error);
+}
+
 .comment-card {
   display: grid;
   gap: 6px;
@@ -1996,6 +2344,58 @@ button:disabled {
   border: 1px solid #e1e7ea;
   border-radius: 8px;
   background: #f8fafb;
+}
+
+.comment-card-header {
+  align-items: flex-start;
+}
+
+.comment-card-header > div:nth-child(2) {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+}
+
+.comment-author-avatar {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  color: #ffffff;
+  background: var(--primary-container);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.comment-actions button {
+  width: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
+  color: var(--on-surface-variant);
+  background: var(--surface-container-low);
+}
+
+.comment-actions button.delete {
+  color: var(--error);
+}
+
+.comment-edit-form {
+  display: grid;
+  gap: 8px;
+}
+
+.comment-edit-form > div {
+  justify-content: flex-start;
+}
+
+.comment-edit-form button {
+  min-height: 34px;
+  padding: 6px 11px;
 }
 
 .comment-card p {
@@ -2181,6 +2581,29 @@ button:disabled {
 
 .task-timeline-list {
   display: grid;
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-inline-end: 6px;
+  scrollbar-color: var(--outline-variant) transparent;
+  scrollbar-width: thin;
+}
+
+.task-timeline-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.task-timeline-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.task-timeline-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--outline-variant);
+}
+
+.task-timeline-list::-webkit-scrollbar-thumb:hover {
+  background: var(--outline);
 }
 
 .task-timeline-item {

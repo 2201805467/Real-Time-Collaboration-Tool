@@ -6,8 +6,9 @@ import { DatabaseSync } from 'node:sqlite';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dataDir = join(__dirname, '..', 'data');
 const dbPath = process.env.COLLAB_DB_PATH || join(dataDir, 'collab-tool.sqlite');
+export const storageDir = dirname(dbPath);
 
-mkdirSync(dataDir, { recursive: true });
+mkdirSync(storageDir, { recursive: true });
 
 export const db = new DatabaseSync(dbPath);
 
@@ -93,6 +94,19 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS attachments (
+    id TEXT PRIMARY KEY,
+    card_id TEXT NOT NULL,
+    user_id TEXT,
+    original_name TEXT NOT NULL,
+    stored_name TEXT NOT NULL UNIQUE,
+    mime_type TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+  );
+
   CREATE TABLE IF NOT EXISTS activity_logs (
     id TEXT PRIMARY KEY,
     board_id TEXT NOT NULL,
@@ -127,6 +141,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_board_columns_board_id ON board_columns(board_id);
   CREATE INDEX IF NOT EXISTS idx_cards_column_id ON cards(column_id);
   CREATE INDEX IF NOT EXISTS idx_comments_card_id ON comments(card_id);
+  CREATE INDEX IF NOT EXISTS idx_attachments_card_id ON attachments(card_id);
   CREATE INDEX IF NOT EXISTS idx_activity_logs_board_id ON activity_logs(board_id);
   CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id, is_read, created_at);
 `);
@@ -147,6 +162,7 @@ ensureColumn('board_members', 'last_seen', 'TEXT');
 ensureColumn('users', 'notify_assignments', 'INTEGER NOT NULL DEFAULT 1');
 ensureColumn('users', 'notify_comments', 'INTEGER NOT NULL DEFAULT 1');
 ensureColumn('users', 'avatar_url', 'TEXT');
+ensureColumn('comments', 'edited_at', 'TEXT');
 
 export function getDatabaseSummary() {
   const tables = db

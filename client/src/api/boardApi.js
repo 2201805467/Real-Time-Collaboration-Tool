@@ -1,4 +1,44 @@
-import { apiRequest } from './client.js';
+import { apiRequest, apiUrl, ApiError } from './client.js';
+
+async function parseApiResponse(response) {
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new ApiError(data.message || 'تعذر إكمال الطلب.', response.status, data);
+  return data;
+}
+
+async function uploadAttachment(boardId, cardId, file, token) {
+  const response = await fetch(`${apiUrl}/api/boards/${boardId}/cards/${cardId}/attachments`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/octet-stream',
+      'X-File-Name': encodeURIComponent(file.name),
+      'X-File-Type': file.type
+    },
+    body: file
+  });
+  return parseApiResponse(response);
+}
+
+async function downloadAttachment(boardId, cardId, attachment, token) {
+  const response = await fetch(`${apiUrl}/api/boards/${boardId}/cards/${cardId}/attachments/${attachment.id}/download`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new ApiError(data.message || 'تعذر تنزيل المرفق.', response.status, data);
+  }
+
+  const objectUrl = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = attachment.name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(objectUrl);
+}
 
 export const boardApi = {
   get: (boardId, token) => apiRequest(`/api/boards/${boardId}`, { token }),
@@ -18,5 +58,10 @@ export const boardApi = {
   getCard: (boardId, cardId, token) => apiRequest(`/api/boards/${boardId}/cards/${cardId}`, { token }),
   updateCard: (boardId, cardId, payload, token) => apiRequest(`/api/boards/${boardId}/cards/${cardId}`, { method: 'PATCH', token, body: payload }),
   removeCard: (boardId, cardId, token) => apiRequest(`/api/boards/${boardId}/cards/${cardId}`, { method: 'DELETE', token }),
-  addComment: (boardId, cardId, body, token) => apiRequest(`/api/boards/${boardId}/cards/${cardId}/comments`, { method: 'POST', token, body: { body } })
+  addComment: (boardId, cardId, body, token) => apiRequest(`/api/boards/${boardId}/cards/${cardId}/comments`, { method: 'POST', token, body: { body } }),
+  updateComment: (boardId, cardId, commentId, body, token) => apiRequest(`/api/boards/${boardId}/cards/${cardId}/comments/${commentId}`, { method: 'PATCH', token, body: { body } }),
+  removeComment: (boardId, cardId, commentId, token) => apiRequest(`/api/boards/${boardId}/cards/${cardId}/comments/${commentId}`, { method: 'DELETE', token }),
+  uploadAttachment,
+  downloadAttachment,
+  removeAttachment: (boardId, cardId, attachmentId, token) => apiRequest(`/api/boards/${boardId}/cards/${cardId}/attachments/${attachmentId}`, { method: 'DELETE', token })
 };
