@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Activity, ArrowLeftRight, Calendar, Download, FileText, Flag, ListChecks, MessageSquare, Paperclip, Pencil, PlusCircle, Trash2, UserRound } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Activity, ArrowLeftRight, Calendar, CheckCircle2, Download, FileText, Flag, ListChecks, MessageSquare, Paperclip, Pencil, PlusCircle, Search, Send, Trash2, UserRound } from 'lucide-react';
 import AttachmentDeleteDialog from '../components/AttachmentDeleteDialog.jsx';
+import CardDeleteDialog from '../components/CardDeleteDialog.jsx';
 import CommentDeleteDialog from '../components/CommentDeleteDialog.jsx';
 import UserAvatar from '../components/UserAvatar.jsx';
 
@@ -12,7 +13,13 @@ const activityIcons = {
   comment_updated: Pencil,
   comment_deleted: Trash2,
   attachment_added: Paperclip,
-  attachment_deleted: Trash2
+  attachment_deleted: Trash2,
+  subtask_submitted: Send,
+  subtask_approved: CheckCircle2,
+  subtask_changes_requested: Pencil,
+  subtask_status_updated: ArrowLeftRight,
+  subtask_attachment_added: Paperclip,
+  subtask_attachment_deleted: Trash2
 };
 
 function formatFileSize(size) {
@@ -23,7 +30,23 @@ function formatFileSize(size) {
 
 function activityDescription(activity) {
   if (activity.action === 'created') return 'أنشأ البطاقة';
-  if (activity.action === 'updated') return 'حدّث تفاصيل البطاقة أو مهامها';
+  if (activity.action === 'updated') {
+    const fieldLabels = {
+      title: 'العنوان',
+      description: 'الوصف',
+      dueDate: 'تاريخ الاستحقاق',
+      assignee: 'المسؤول',
+      priority: 'الأولوية',
+      tags: 'التصنيفات',
+      checklist: 'المهام الفرعية'
+    };
+    const changedFields = (activity.metadata?.changedFields || [])
+      .map((field) => fieldLabels[field])
+      .filter(Boolean);
+    return changedFields.length
+      ? `حدّث ${changedFields.join('، ')}`
+      : 'حدّث تفاصيل البطاقة أو مهامها';
+  }
   if (activity.action === 'moved') {
     return activity.metadata?.columnTitle
       ? `نقل البطاقة إلى «${activity.metadata.columnTitle}»`
@@ -34,6 +57,12 @@ function activityDescription(activity) {
   if (activity.action === 'comment_deleted') return 'حذف تعليقاً';
   if (activity.action === 'attachment_added') return `أضاف المرفق «${activity.metadata?.fileName || 'ملف'}»`;
   if (activity.action === 'attachment_deleted') return `حذف المرفق «${activity.metadata?.fileName || 'ملف'}»`;
+  if (activity.action === 'subtask_submitted') return `أرسل المهمة «${activity.metadata?.subtaskTitle || 'مهمة فرعية'}» للمراجعة`;
+  if (activity.action === 'subtask_approved') return `اعتمد المهمة «${activity.metadata?.subtaskTitle || 'مهمة فرعية'}»`;
+  if (activity.action === 'subtask_changes_requested') return `طلب تعديلات على المهمة «${activity.metadata?.subtaskTitle || 'مهمة فرعية'}»`;
+  if (activity.action === 'subtask_status_updated') return `حدّث حالة المهمة «${activity.metadata?.subtaskTitle || 'مهمة فرعية'}»`;
+  if (activity.action === 'subtask_attachment_added') return `أرفق «${activity.metadata?.fileName || 'ملف'}» بالمهمة «${activity.metadata?.subtaskTitle || 'مهمة فرعية'}»`;
+  if (activity.action === 'subtask_attachment_deleted') return `حذف مرفقًا من المهمة «${activity.metadata?.subtaskTitle || 'مهمة فرعية'}»`;
   return 'أجرى تغييراً على البطاقة';
 }
 
@@ -55,6 +84,7 @@ function TaskDetailsPage({
   comments,
   attachments,
   cardActivity,
+  columns,
   commentBody,
   isAddingComment,
   updatingCommentId,
@@ -79,12 +109,25 @@ function TaskDetailsPage({
   handleDownloadAttachment,
   handleDeleteAttachment,
   canManageAttachments,
+  openCard,
   navigateToSection
 }) {
   const [attachmentToDelete, setAttachmentToDelete] = useState(null);
   const [commentToDelete, setCommentToDelete] = useState(null);
   const [editingCommentId, setEditingCommentId] = useState('');
   const [editingCommentBody, setEditingCommentBody] = useState('');
+  const [isCardDeleteOpen, setIsCardDeleteOpen] = useState(false);
+  const [taskSearch, setTaskSearch] = useState('');
+
+  const projectTasks = useMemo(() => columns.flatMap((column) =>
+    column.cards.map((card) => ({ ...card, columnTitle: column.title }))
+  ), [columns]);
+  const filteredProjectTasks = useMemo(() => {
+    const query = taskSearch.trim().toLocaleLowerCase('ar');
+    if (!query) return projectTasks;
+    return projectTasks.filter((card) => [card.title, card.description, card.assigneeName, card.columnTitle, ...(card.tags || [])]
+      .some((value) => String(value || '').toLocaleLowerCase('ar').includes(query)));
+  }, [projectTasks, taskSearch]);
 
   async function confirmAttachmentDelete() {
     if (!attachmentToDelete) return;
@@ -118,14 +161,14 @@ function TaskDetailsPage({
                 <aside className="card-details task-details-page" aria-label="Card details">
                   <div className="card-details-header task-details-topbar">
                     <div>
-                      <p className="eyebrow">Card</p>
+                      <p className="eyebrow">تفاصيل البطاقة</p>
                       <h3>{selectedCard?.title || 'جاري فتح البطاقة...'}</h3>
                     </div>
                     <div className="details-actions">
                       <button
                         type="button"
                         className="danger-button"
-                        onClick={handleDeleteCard}
+                        onClick={() => setIsCardDeleteOpen(true)}
                         disabled={!canDeleteSelectedCard || isDeletingCard || isLoadingCardDetails}
                       >
                         {isDeletingCard ? 'جاري الحذف...' : 'حذف'}
@@ -155,15 +198,15 @@ function TaskDetailsPage({
                         </div>
                         <div className="task-property-grid">
                           <div>
-                            <span><UserRound size={16} aria-hidden="true" /> Assignee</span>
-                            <strong>{boardMembers.find((member) => member.id === cardDetailsForm.assigneeId)?.name || 'Unassigned'}</strong>
+                            <span><UserRound size={16} aria-hidden="true" /> المسؤول</span>
+                            <strong>{boardMembers.find((member) => member.id === cardDetailsForm.assigneeId)?.name || 'غير معيّن'}</strong>
                           </div>
                           <div>
-                            <span><Calendar size={16} aria-hidden="true" /> Due date</span>
-                            <strong>{cardDetailsForm.dueDate || 'No due date'}</strong>
+                            <span><Calendar size={16} aria-hidden="true" /> تاريخ الاستحقاق</span>
+                            <strong>{cardDetailsForm.dueDate || 'بدون تاريخ'}</strong>
                           </div>
                           <div>
-                            <span><ListChecks size={16} aria-hidden="true" /> Subtasks</span>
+                            <span><ListChecks size={16} aria-hidden="true" /> المهام الفرعية</span>
                             <strong>
                               {cardDetailsForm.checklist.filter((item) => item.status === 'done' || item.done).length}/{cardDetailsForm.checklist.length}
                             </strong>
@@ -316,6 +359,7 @@ function TaskDetailsPage({
                               إضافة مهمة
                             </button>
                           </div>
+                          <small className="checklist-workflow-note">تُحدّث حالة التنفيذ والاعتماد من صفحة «مهامي ومراجعاتي».</small>
                           {cardDetailsForm.checklist.length === 0 ? (
                             <p className="column-empty">لا توجد مهام فرعية بعد.</p>
                           ) : (
@@ -326,7 +370,7 @@ function TaskDetailsPage({
                                     value={item.text}
                                     onChange={(event) => updateChecklistItem(item.id, { text: event.target.value })}
                                     placeholder="اكتب مهمة فرعية"
-                                    disabled={!canEditSelectedSubtasks}
+                                    disabled
                                   />
                                   <select
                                     value={item.assigneeId || ''}
@@ -345,11 +389,13 @@ function TaskDetailsPage({
                                     value={item.status || (item.done ? 'done' : 'todo')}
                                     onChange={(event) => updateChecklistItem(item.id, { status: event.target.value })}
                                     aria-label="Subtask status"
-                                    disabled={!canEditSelectedSubtasks && item.assigneeId !== user?.id}
+                                    disabled={!canEditSelectedSubtasks}
                                   >
                                     <option value="todo">لم تبدأ</option>
                                     <option value="in_progress">قيد التنفيذ</option>
-                                    <option value="done">تم الانتهاء</option>
+                                    <option value="review">بانتظار المراجعة</option>
+                                    <option value="changes_requested" disabled={!canEditSelectedSubtasks}>مطلوب تعديل</option>
+                                    <option value="done" disabled={!canEditSelectedSubtasks}>مكتملة ومعتمدة</option>
                                   </select>
                                   <button
                                     type="button"
@@ -424,7 +470,10 @@ function TaskDetailsPage({
                             const ActivityIcon = activityIcons[activity.action] || Activity;
                             return (
                               <article key={activity.id} className="task-timeline-item">
-                                <span className={`task-timeline-icon ${activity.action}`}><ActivityIcon size={15} /></span>
+                                <span className="task-timeline-actor">
+                                  <UserAvatar src={activity.actorAvatarUrl} name={activity.actorName || 'النظام'} fallbackLength={2} />
+                                  <span className={`task-timeline-icon ${activity.action}`}><ActivityIcon size={11} /></span>
+                                </span>
                                 <div>
                                   <p><strong>{activity.actorName || 'النظام'}</strong> {activityDescription(activity)}</p>
                                   <time dateTime={activity.createdAt}>{new Date(activity.createdAt).toLocaleString('ar')}</time>
@@ -506,21 +555,56 @@ function TaskDetailsPage({
                           onConfirm={confirmCommentDelete}
                         />
                       ) : null}
+                      {isCardDeleteOpen ? (
+                        <CardDeleteDialog
+                          card={selectedCard}
+                          isDeleting={isDeletingCard}
+                          onCancel={() => setIsCardDeleteOpen(false)}
+                          onConfirm={handleDeleteCard}
+                        />
+                      ) : null}
                     </>
                   ) : null}
                 </aside>
               ) : (
-                <section className="card-details task-details-empty" aria-label="Task details placeholder">
-                  <div className="card-details-header">
+                <section className="card-details task-index-page" aria-label="مهام المشروع">
+                  <header className="task-index-header">
                     <div>
-                      <p className="eyebrow">Task Activity</p>
-                      <h3>Select a card from the Kanban board</h3>
+                      <p className="eyebrow">مهام المشروع</p>
+                      <h3>تفاصيل المهمة والنشاط</h3>
+                      <p>اختر بطاقة لمتابعة تفاصيلها ومهامها الفرعية وتعليقات الفريق وسجل نشاطها.</p>
                     </div>
-                    <button type="button" className="secondary-button" onClick={() => navigateToSection('kanban')}>
-                      Open Kanban
-                    </button>
+                    <button type="button" className="secondary-button" onClick={() => navigateToSection('kanban')}>فتح لوحة الكانبان</button>
+                  </header>
+                  <div className="task-index-toolbar">
+                    <label className="task-index-search">
+                      <Search size={18} aria-hidden="true" />
+                      <input value={taskSearch} onChange={(event) => setTaskSearch(event.target.value)} placeholder="ابحث في عنوان المهمة أو وصفها أو المسؤول..." />
+                    </label>
+                    <span>{filteredProjectTasks.length} من {projectTasks.length} بطاقة</span>
                   </div>
-                  <p className="empty-state">Card details, subtasks, comments, and activity will appear here after you select a card.</p>
+                  {filteredProjectTasks.length ? (
+                    <div className="task-index-grid">
+                      {filteredProjectTasks.map((card) => {
+                        const completed = card.checklist?.filter((item) => item.status === 'done' || item.done).length || 0;
+                        const total = card.checklist?.length || 0;
+                        return (
+                          <button key={card.id} type="button" className="task-index-card" onClick={() => openCard(card.id)}>
+                            <span className="task-index-card-top"><span>{card.columnTitle}</span><strong className={`task-priority-chip ${card.priority || 'normal'}`}>{priorityLabels[card.priority] || priorityLabels.normal}</strong></span>
+                            <strong className="task-index-title">{card.title}</strong>
+                            <p>{card.description || 'لا يوجد وصف لهذه البطاقة.'}</p>
+                            <span className="task-index-meta">
+                              <span><UserAvatar src={card.assigneeAvatarUrl} name={card.assigneeName || 'غير معيّن'} />{card.assigneeName || 'غير معيّن'}</span>
+                              <span><CheckCircle2 size={15} />{completed}/{total}</span>
+                              {card.dueDate ? <span><Calendar size={15} />{card.dueDate}</span> : null}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="empty-state"><ListChecks size={30} /><strong>{projectTasks.length ? 'لا توجد نتائج مطابقة' : 'لا توجد بطاقات في هذا المشروع بعد'}</strong><span>{projectTasks.length ? 'جرّب عبارة بحث مختلفة.' : 'أنشئ بطاقة من لوحة الكانبان لتظهر هنا.'}</span></div>
+                  )}
                 </section>
               )
   );

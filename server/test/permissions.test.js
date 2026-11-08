@@ -323,30 +323,77 @@ test('owner, manager, and member permissions follow the project hierarchy', asyn
   });
   assert.equal(memberCannotEditCard.status, 403);
 
-  const completedChecklist = assignedCard.data.card.checklist.map((item) => ({
-    ...item,
-    status: 'done'
-  }));
-  const memberCompletesOwnTask = await api(`/api/boards/${boardId}/cards/${cardId}`, {
+  const subtaskId = assignedCard.data.card.checklist[0].id;
+  const memberStartsOwnTask = await api(`/api/boards/${boardId}/cards/${cardId}/subtasks/${subtaskId}/status`, {
     method: 'PATCH',
     token: member.token,
-    body: { checklist: completedChecklist }
+    body: { status: 'in_progress' }
   });
-  assert.equal(memberCompletesOwnTask.status, 200);
-  assert.equal(memberCompletesOwnTask.data.card.checklist[0].status, 'done');
+  assert.equal(memberStartsOwnTask.status, 200);
+
+  const memberDeliverable = await attachmentApi(
+    `/api/boards/${boardId}/cards/${cardId}/subtasks/${subtaskId}/attachments`,
+    { token: member.token, body: Buffer.from('completed document'), name: 'result.docx', type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }
+  );
+  assert.equal(memberDeliverable.status, 201);
+
+  const myTasks = await api('/api/my-tasks', { token: member.token });
+  assert.equal(myTasks.status, 200);
+  assert.equal(myTasks.data.assignedTasks[0].attachments.length, 1);
+
+  const memberSubmitsForReview = await api(`/api/boards/${boardId}/cards/${cardId}/subtasks/${subtaskId}/status`, {
+    method: 'PATCH', token: member.token, body: { status: 'review' }
+  });
+  assert.equal(memberSubmitsForReview.status, 200);
+  assert.equal(memberSubmitsForReview.data.task.status, 'review');
+
+  const memberCannotApproveOwnTask = await api(`/api/boards/${boardId}/cards/${cardId}/subtasks/${subtaskId}/status`, {
+    method: 'PATCH', token: member.token, body: { status: 'done' }
+  });
+  assert.equal(memberCannotApproveOwnTask.status, 403);
+
+  const managerReviewQueue = await api('/api/my-tasks', { token: manager.token });
+  assert.equal(managerReviewQueue.status, 200);
+  assert.equal(managerReviewQueue.data.reviewTasks.length, 1);
+
+  const managerApprovesTask = await api(`/api/boards/${boardId}/cards/${cardId}/subtasks/${subtaskId}/status`, {
+    method: 'PATCH', token: manager.token, body: { status: 'done' }
+  });
+  assert.equal(managerApprovesTask.status, 200);
+  assert.equal(managerApprovesTask.data.task.status, 'done');
 
   const managerAddsTask = await api(`/api/boards/${boardId}/cards/${cardId}`, {
     method: 'PATCH',
     token: manager.token,
     body: {
       checklist: [
-        ...memberCompletesOwnTask.data.card.checklist,
+        ...managerApprovesTask.data.card.checklist,
         { text: 'Second task', assigneeId: member.user.id, status: 'todo' }
       ]
     }
   });
   assert.equal(managerAddsTask.status, 200);
   assert.equal(managerAddsTask.data.card.checklist.length, 2);
+
+  const secondSubtaskId = managerAddsTask.data.card.checklist[1].id;
+  const memberStartsSecondTask = await api(`/api/boards/${boardId}/cards/${cardId}/subtasks/${secondSubtaskId}/status`, {
+    method: 'PATCH', token: member.token, body: { status: 'in_progress' }
+  });
+  assert.equal(memberStartsSecondTask.status, 200);
+  const memberSubmitsSecondTask = await api(`/api/boards/${boardId}/cards/${cardId}/subtasks/${secondSubtaskId}/status`, {
+    method: 'PATCH', token: member.token, body: { status: 'review' }
+  });
+  assert.equal(memberSubmitsSecondTask.status, 200);
+  const managerRequestsChanges = await api(`/api/boards/${boardId}/cards/${cardId}/subtasks/${secondSubtaskId}/status`, {
+    method: 'PATCH', token: manager.token, body: { status: 'changes_requested', reviewNote: 'Please revise the document' }
+  });
+  assert.equal(managerRequestsChanges.status, 200);
+  assert.equal(managerRequestsChanges.data.task.status, 'changes_requested');
+  assert.equal(managerRequestsChanges.data.task.reviewNote, 'Please revise the document');
+  const memberResumesChanges = await api(`/api/boards/${boardId}/cards/${cardId}/subtasks/${secondSubtaskId}/status`, {
+    method: 'PATCH', token: member.token, body: { status: 'in_progress' }
+  });
+  assert.equal(memberResumesChanges.status, 200);
 
   const memberComment = await api(`/api/boards/${boardId}/cards/${cardId}/comments`, {
     method: 'POST',
@@ -377,7 +424,8 @@ test('owner, manager, and member permissions follow the project hierarchy', asyn
   assert.equal(managerNotifications.status, 200);
   assert.ok(managerNotifications.data.notifications.some((item) => item.type === 'card_assigned'));
   assert.ok(managerNotifications.data.notifications.some((item) => item.type === 'card_commented'));
-  assert.equal(managerNotifications.data.unreadCount, 2);
+  assert.ok(managerNotifications.data.notifications.some((item) => item.type === 'subtask_review_requested'));
+  assert.ok(managerNotifications.data.unreadCount >= 3);
 
   const ownerDeletesMemberComment = await api(
     `/api/boards/${boardId}/cards/${cardId}/comments/${memberComment.data.comment.id}`,

@@ -34,6 +34,11 @@
   .team-radar,
   .team-table,
   .task-details-page,
+  .task-index-page,
+  .my-tasks-hero,
+  .my-tasks-summary article,
+  .my-tasks-controls,
+  .my-task-card,
   .share-dialog,
   .notifications-popover
   , .settings-hero
@@ -42,6 +47,38 @@
   border-color: #343c53;
   background: linear-gradient(145deg, #1b2030, #171b29);
   box-shadow: 0 10px 30px rgb(0 0 0 / 0.2);
+}
+
+:root[data-theme="dark"] .task-index-card {
+  border-color: #343c53;
+  background: linear-gradient(145deg, #1b2030, #171b29);
+}
+
+:root[data-theme="dark"] .task-index-card:hover {
+  border-color: #7567f4;
+  background: #22283a;
+}
+
+:root[data-theme="dark"] .confirm-dialog-icon.unsaved {
+  border-color: rgb(228 166 68 / 0.2);
+  color: #ffc967;
+  background: #3b2b18;
+}
+
+:root[data-theme="dark"] .my-task-status.review {
+  color: #ffd78a;
+  background: #493419;
+}
+
+:root[data-theme="dark"] .my-task-status.changes_requested,
+:root[data-theme="dark"] .my-task-review-note {
+  color: #ffb8c0;
+  background: #3a1f29;
+}
+
+:root[data-theme="dark"] .my-task-status.done {
+  color: #72e0b8;
+  background: #123d31;
 }
 
 :root[data-theme="dark"] .settings-card > button:not(.settings-theme-button) {

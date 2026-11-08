@@ -1,13 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { matchPath, useLocation, useNavigate } from 'react-router-dom';
 import WorkspaceChrome from './components/WorkspaceChrome.jsx';
 import UserAvatar from './components/UserAvatar.jsx';
 import ShareBoardDialog from './components/ShareBoardDialog.jsx';
+import UnsavedChangesDialog from './components/UnsavedChangesDialog.jsx';
 import TeamPage from './pages/TeamPage.jsx';
 import WorkspaceOverviewPage from './pages/WorkspaceOverviewPage.jsx';
 import KanbanPage from './pages/KanbanPage.jsx';
 import TaskDetailsPage from './pages/TaskDetailsPage.jsx';
+import MyTasksPage from './pages/MyTasksPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import { boardApi } from './api/boardApi.js';
 import { acceptInvite, createBoard, getInvite } from './api/workspaceApi.js';
@@ -31,6 +33,10 @@ const roleLabels = {
 };
 
 function getWorkspaceRoute(pathname) {
+  if (pathname === '/my-tasks') {
+    return { boardId: '', cardId: '', section: 'my-tasks' };
+  }
+
   if (pathname === '/settings') {
     return { boardId: '', cardId: '', section: 'settings' };
   }
@@ -56,6 +62,19 @@ function getWorkspaceRoute(pathname) {
   }
 
   return { boardId: '', cardId: '', section: 'overview' };
+}
+
+function editableCardSnapshot(card) {
+  if (!card) return '';
+  return JSON.stringify({
+    title: card.title || '',
+    description: card.description || '',
+    dueDate: card.dueDate || '',
+    assigneeId: card.assigneeId || '',
+    priority: card.priority || 'normal',
+    tags: card.tags || [],
+    checklist: card.checklist || []
+  });
 }
 
 function App() {
@@ -177,6 +196,25 @@ function App() {
   const [attachments, setAttachments] = useState([]);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [deletingAttachmentId, setDeletingAttachmentId] = useState('');
+  const [isUnsavedDialogOpen, setIsUnsavedDialogOpen] = useState(false);
+  const pendingNavigationRef = useRef(null);
+  const cardDetailsDirty = Boolean(selectedCard) && editableCardSnapshot(cardDetailsForm) !== editableCardSnapshot(selectedCard);
+  const cardDetailsDirtyRef = useRef(cardDetailsDirty);
+
+  useEffect(() => {
+    cardDetailsDirtyRef.current = cardDetailsDirty;
+  }, [cardDetailsDirty]);
+
+  useEffect(() => {
+    function handleBeforeUnload(event) {
+      if (!cardDetailsDirty) return;
+      event.preventDefault();
+      event.returnValue = '';
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [cardDetailsDirty]);
 
   useEffect(() => {
     if (!user) {
@@ -318,16 +356,20 @@ function App() {
       if (selectedCardId === payload.card.id) {
         mergeCardActivity(payload.activity);
         setSelectedCard(payload.card);
-        setCardDetailsForm({
-          title: payload.card.title,
-          description: payload.card.description || '',
-          dueDate: payload.card.dueDate || '',
-          assigneeId: payload.card.assigneeId || '',
-          priority: payload.card.priority || 'normal',
-          tags: payload.card.tags || [],
-          tagDraft: '',
-          checklist: payload.card.checklist || []
-        });
+        if (!cardDetailsDirtyRef.current) {
+          setCardDetailsForm({
+            title: payload.card.title,
+            description: payload.card.description || '',
+            dueDate: payload.card.dueDate || '',
+            assigneeId: payload.card.assigneeId || '',
+            priority: payload.card.priority || 'normal',
+            tags: payload.card.tags || [],
+            tagDraft: '',
+            checklist: payload.card.checklist || []
+          });
+        } else {
+          setCardDetailsError('وصل تحديث جديد لهذه البطاقة من أحد أعضاء الفريق. بقيت تعديلاتك المحلية كما هي؛ راجعها قبل الحفظ.');
+        }
       }
     }
 
@@ -400,6 +442,10 @@ function App() {
 
       setAttachments((currentAttachments) => currentAttachments.filter((item) => item.id !== payload.attachmentId));
       mergeCardActivity(payload.activity);
+    }
+
+    function handleSubtaskUpdated(payload) {
+      if (selectedCardId === payload.cardId) mergeCardActivity(payload.activity);
     }
 
     function handleCardDeleted(payload) {
@@ -525,6 +571,7 @@ function App() {
       'board:comment-deleted': handleCommentDeleted,
       'board:attachment-created': handleAttachmentCreated,
       'board:attachment-deleted': handleAttachmentDeleted,
+      'board:subtask-updated': handleSubtaskUpdated,
       'board:access-revoked': handleAccessRevoked,
       'board:presence': handlePresenceUpdated,
       'notification:created': handleNotificationCreated
@@ -547,7 +594,12 @@ function App() {
     }
 
     if (notification.entityType === 'card' && notification.boardId && notification.entityId) {
-      navigate(`/boards/${encodeURIComponent(notification.boardId)}/tasks/${encodeURIComponent(notification.entityId)}`);
+      const openNotificationCard = () => navigate(`/boards/${encodeURIComponent(notification.boardId)}/tasks/${encodeURIComponent(notification.entityId)}`);
+      if (selectedCardId && notification.entityId !== selectedCardId) {
+        requestCardNavigation(openNotificationCard);
+      } else {
+        openNotificationCard();
+      }
     }
   }
 
@@ -698,7 +750,38 @@ function App() {
     }
   }
 
+  function requestCardNavigation(action) {
+    if (!cardDetailsDirty) {
+      action();
+      return;
+    }
+
+    pendingNavigationRef.current = action;
+    setIsUnsavedDialogOpen(true);
+  }
+
+  function continuePendingNavigation() {
+    const action = pendingNavigationRef.current;
+    pendingNavigationRef.current = null;
+    setIsUnsavedDialogOpen(false);
+    action?.();
+  }
+
+  function cancelPendingNavigation() {
+    pendingNavigationRef.current = null;
+    setIsUnsavedDialogOpen(false);
+  }
+
   function navigateToSection(section) {
+    if (selectedCardId && section !== 'task') {
+      requestCardNavigation(() => navigateToSectionNow(section));
+      return;
+    }
+
+    navigateToSectionNow(section);
+  }
+
+  function navigateToSectionNow(section) {
     if (section === 'overview') {
       closeBoard();
       return;
@@ -708,6 +791,13 @@ function App() {
       if (selectedBoardId) closeBoard(false);
       setActiveSidebarSection('settings');
       navigate('/settings');
+      return;
+    }
+
+    if (section === 'my-tasks') {
+      if (selectedBoardId) closeBoard(false);
+      setActiveSidebarSection('my-tasks');
+      navigate('/my-tasks');
       return;
     }
 
@@ -723,6 +813,10 @@ function App() {
     const pathSection = section === 'task' ? 'tasks' : section;
     const cardSuffix = section === 'task' && selectedCardId ? `/${encodeURIComponent(selectedCardId)}` : '';
     navigate(`/boards/${encodeURIComponent(selectedBoardId)}/${pathSection}${cardSuffix}`);
+  }
+
+  function handleBoardChange(boardId) {
+    requestCardNavigation(() => (boardId ? openBoard(boardId) : closeBoard()));
   }
 
   async function handleAuthSubmit(event) {
@@ -1075,7 +1169,12 @@ function App() {
     }
   }
 
-  async function openCard(cardId, updateRoute = true) {
+  async function openCard(cardId, updateRoute = true, skipUnsavedCheck = false) {
+    if (!skipUnsavedCheck && selectedCardId && selectedCardId !== cardId && cardDetailsDirty) {
+      requestCardNavigation(() => openCard(cardId, updateRoute, true));
+      return;
+    }
+
     if (updateRoute) {
       navigate(`/boards/${encodeURIComponent(selectedBoardId)}/tasks/${encodeURIComponent(cardId)}`);
     }
@@ -1125,6 +1224,10 @@ function App() {
     if (updateRoute && selectedBoardId) {
       navigate(`/boards/${encodeURIComponent(selectedBoardId)}/kanban`);
     }
+  }
+
+  function requestCloseCard() {
+    requestCardNavigation(() => closeCard());
   }
 
   function addChecklistItem() {
@@ -1185,11 +1288,10 @@ function App() {
     }));
   }
 
-  async function handleSaveCardDetails(event) {
-    event.preventDefault();
+  async function saveCardDetails() {
 
     if (!selectedCardId) {
-      return;
+      return false;
     }
 
     setCardDetailsError('');
@@ -1211,17 +1313,26 @@ function App() {
       mergeCardInState(data.card);
       setCardActivity(data.activity || []);
       loadWorkspaceOverview();
+      return true;
     } catch (error) {
       setCardDetailsError(error.message);
+      return false;
     } finally {
       setIsSavingCardDetails(false);
     }
   }
 
+  async function handleSaveCardDetails(event) {
+    event?.preventDefault();
+    return saveCardDetails();
+  }
+
+  async function saveCardDetailsAndContinue() {
+    if (await saveCardDetails()) continuePendingNavigation();
+  }
+
   async function handleDeleteCard() {
-    if (!selectedBoardId || !selectedCardId || !window.confirm('هل تريد حذف هذه البطاقة؟')) {
-      return;
-    }
+    if (!selectedBoardId || !selectedCardId) return false;
 
     setCardDetailsError('');
     setIsDeletingCard(true);
@@ -1231,8 +1342,10 @@ function App() {
       removeCardFromState(selectedCardId);
       loadWorkspaceOverview();
       closeCard();
+      return true;
     } catch (error) {
       setCardDetailsError(error.message);
+      return false;
     } finally {
       setIsDeletingCard(false);
     }
@@ -1415,11 +1528,12 @@ function App() {
   const canDeleteSelectedCard = userIsBoardOwner;
   const canSaveSelectedCard = Boolean(selectedCard) && (
     canEditSelectedCardDetails ||
-    canEditSelectedSubtasks ||
-    selectedCard.checklist?.some((item) => item.assigneeId === user?.id)
+    canEditSelectedSubtasks
   );
   const activeBoardTitle = activeSidebarSection === 'settings'
     ? 'الإعدادات العامة'
+    : activeSidebarSection === 'my-tasks'
+      ? 'مهامي ومراجعاتي'
     : activeBoard?.title || 'لوحة الكانبان';
 
   return (
@@ -1440,7 +1554,7 @@ function App() {
           unreadNotificationsCount={unreadNotificationsCount}
           isLoadingNotifications={isLoadingNotifications}
           notificationsError={notificationsError}
-          onBoardChange={(boardId) => (boardId ? openBoard(boardId) : closeBoard())}
+          onBoardChange={handleBoardChange}
           onNavigate={navigateToSection}
           onOpenNotification={handleOpenNotification}
           onMarkAllNotificationsRead={markAllNotificationsRead}
@@ -1461,6 +1575,15 @@ function App() {
           onCreate={handleCreateInvite}
           onCopy={handleCopyInvite}
           onRevoke={handleRevokeInvite}
+        />
+      ) : null}
+
+      {isUnsavedDialogOpen ? (
+        <UnsavedChangesDialog
+          isSaving={isSavingCardDetails}
+          onCancel={cancelPendingNavigation}
+          onDiscard={continuePendingNavigation}
+          onSave={saveCardDetailsAndContinue}
         />
       ) : null}
 
@@ -1608,6 +1731,14 @@ function App() {
             />
           ) : null}
 
+          {!selectedBoardId && activeSidebarSection === 'my-tasks' ? (
+            <MyTasksPage
+              token={token}
+              refreshKey={notifications[0]?.id || ''}
+              onOpenCard={(boardId, cardId) => navigate(`/boards/${encodeURIComponent(boardId)}/tasks/${encodeURIComponent(cardId)}`)}
+            />
+          ) : null}
+
           {selectedBoardId ? (
             <section className="board-panel" aria-label="Selected board">
               <div className="board-header" id="kanban">
@@ -1630,7 +1761,7 @@ function App() {
                 <button
                   type="button"
                   className="secondary-button"
-                  onClick={() => (activeSidebarSection === 'task' && selectedCardId ? closeCard() : closeBoard())}
+                  onClick={() => (activeSidebarSection === 'task' && selectedCardId ? requestCloseCard() : closeBoard())}
                 >
                   رجوع
                 </button>
@@ -1734,6 +1865,7 @@ function App() {
                   comments={comments}
                   attachments={attachments}
                   cardActivity={cardActivity}
+                  columns={columns}
                   commentBody={commentBody}
                   isAddingComment={isAddingComment}
                   updatingCommentId={updatingCommentId}
@@ -1744,7 +1876,7 @@ function App() {
                   setCardDetailsForm={setCardDetailsForm}
                   setCommentBody={setCommentBody}
                   handleDeleteCard={handleDeleteCard}
-                  closeCard={closeCard}
+                  closeCard={requestCloseCard}
                   addTag={addTag}
                   removeTag={removeTag}
                   addChecklistItem={addChecklistItem}
@@ -1758,6 +1890,7 @@ function App() {
                   handleDownloadAttachment={handleDownloadAttachment}
                   handleDeleteAttachment={handleDeleteAttachment}
                   canManageAttachments={canEditSelectedSubtasks}
+                  openCard={openCard}
                   navigateToSection={navigateToSection}
                 />
               ) : null}

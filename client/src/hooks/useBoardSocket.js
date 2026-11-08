@@ -15,6 +15,11 @@ const boardEvents = [
   'board:member-removed',
   'board:member-updated',
   'board:comment-created',
+  'board:comment-updated',
+  'board:comment-deleted',
+  'board:attachment-created',
+  'board:attachment-deleted',
+  'board:subtask-updated',
   'board:access-revoked',
   'notification:created'
 ];

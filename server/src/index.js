@@ -193,7 +193,7 @@ function normalizeChecklist(value) {
     return [];
   }
 
-  const allowedStatuses = new Set(['todo', 'in_progress', 'done']);
+  const allowedStatuses = new Set(['todo', 'in_progress', 'review', 'changes_requested', 'done']);
 
   return value
     .map((item) => {
@@ -208,7 +208,10 @@ function normalizeChecklist(value) {
         id: item.id || randomUUID(),
         text: String(item.text || '').trim(),
         assigneeId: String(item.assigneeId || '').trim(),
-        status
+        status,
+        reviewNote: String(item.reviewNote || '').trim().slice(0, 1000),
+        reviewedAt: item.reviewedAt || null,
+        reviewedBy: item.reviewedBy || null
       };
     })
     .filter((item) => item.text)
@@ -252,6 +255,32 @@ function getAttachmentsForCard(cardId) {
     WHERE attachments.card_id = ?
     ORDER BY attachments.created_at DESC, attachments.rowid DESC
   `).all(cardId);
+}
+
+function getSubtaskAttachments(cardId, subtaskId = null) {
+  const whereSubtask = subtaskId ? 'AND subtask_attachments.subtask_id = ?' : '';
+  const params = subtaskId ? [cardId, subtaskId] : [cardId];
+  return db.prepare(`
+    SELECT
+      subtask_attachments.id,
+      subtask_attachments.card_id AS cardId,
+      subtask_attachments.subtask_id AS subtaskId,
+      subtask_attachments.original_name AS name,
+      subtask_attachments.mime_type AS mimeType,
+      subtask_attachments.size,
+      subtask_attachments.created_at AS createdAt,
+      subtask_attachments.user_id AS uploadedBy,
+      users.name AS uploaderName,
+      users.avatar_url AS uploaderAvatarUrl
+    FROM subtask_attachments
+    LEFT JOIN users ON users.id = subtask_attachments.user_id
+    WHERE subtask_attachments.card_id = ? ${whereSubtask}
+    ORDER BY subtask_attachments.created_at DESC, subtask_attachments.rowid DESC
+  `).all(...params);
+}
+
+function findSubtask(card, subtaskId) {
+  return card?.checklist?.find((item) => item.id === subtaskId) || null;
 }
 
 function deleteStoredAttachments(attachments) {
@@ -720,35 +749,6 @@ function getWorkspaceStats(userId) {
   };
 }
 
-function canUpdateOwnSubtaskStatuses(previousChecklist, nextChecklist, userId) {
-  if (previousChecklist.length !== nextChecklist.length) {
-    return false;
-  }
-
-  const previousItems = new Map(previousChecklist.map((item) => [item.id, item]));
-
-  return nextChecklist.every((nextItem) => {
-    const previousItem = previousItems.get(nextItem.id);
-
-    if (!previousItem) {
-      return false;
-    }
-
-    const sameText = previousItem.text === nextItem.text;
-    const sameAssignee = (previousItem.assigneeId || '') === (nextItem.assigneeId || '');
-
-    if (!sameText || !sameAssignee) {
-      return false;
-    }
-
-    if (previousItem.status === nextItem.status) {
-      return true;
-    }
-
-    return nextItem.assigneeId === userId;
-  });
-}
-
 function getCardForBoard(cardId, boardId) {
   const card = db
     .prepare(`
@@ -1067,7 +1067,13 @@ app.delete('/api/boards/:boardId', requireAuth, (req, res) => {
     INNER JOIN cards ON cards.id = attachments.card_id
     INNER JOIN board_columns ON board_columns.id = cards.column_id
     WHERE board_columns.board_id = ?
-  `).all(board.id);
+    UNION ALL
+    SELECT subtask_attachments.stored_name AS storedName
+    FROM subtask_attachments
+    INNER JOIN cards ON cards.id = subtask_attachments.card_id
+    INNER JOIN board_columns ON board_columns.id = cards.column_id
+    WHERE board_columns.board_id = ?
+  `).all(board.id, board.id);
   db.prepare('DELETE FROM boards WHERE id = ?').run(board.id);
   deleteStoredAttachments(storedAttachments);
 
@@ -1747,8 +1753,258 @@ app.get('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
     card,
     comments: getCommentsForCard(card.id),
     activity: getActivityForCard(card.id, board.id),
-    attachments: getAttachmentsForCard(card.id)
+    attachments: getAttachmentsForCard(card.id),
+    subtaskAttachments: getSubtaskAttachments(card.id)
   });
+});
+
+app.get('/api/my-tasks', requireAuth, (req, res) => {
+  const cards = db.prepare(`
+    SELECT
+      cards.id AS cardId,
+      cards.title AS cardTitle,
+      cards.description AS cardDescription,
+      cards.due_date AS dueDate,
+      cards.priority,
+      cards.assignee_id AS managerId,
+      cards.checklist,
+      boards.id AS boardId,
+      boards.title AS boardTitle,
+      boards.owner_id AS ownerId,
+      board_members.role AS boardRole,
+      board_columns.title AS columnTitle,
+      manager.name AS managerName,
+      manager.avatar_url AS managerAvatarUrl
+    FROM cards
+    INNER JOIN board_columns ON board_columns.id = cards.column_id
+    INNER JOIN boards ON boards.id = board_columns.board_id
+    INNER JOIN board_members ON board_members.board_id = boards.id AND board_members.user_id = ?
+    LEFT JOIN users AS manager ON manager.id = cards.assignee_id
+    WHERE cards.deleted_at IS NULL
+    ORDER BY cards.updated_at DESC
+  `).all(req.user.id);
+
+  const assignedTasks = [];
+  const reviewTasks = [];
+
+  cards.forEach((card) => {
+    const attachments = getSubtaskAttachments(card.cardId);
+    normalizeChecklist(parseJsonList(card.checklist)).forEach((subtask) => {
+      const task = {
+        ...subtask,
+        cardId: card.cardId,
+        cardTitle: card.cardTitle,
+        cardDescription: card.cardDescription,
+        dueDate: card.dueDate,
+        priority: card.priority || 'normal',
+        managerId: card.managerId,
+        managerName: card.managerName,
+        managerAvatarUrl: card.managerAvatarUrl,
+        boardId: card.boardId,
+        boardTitle: card.boardTitle,
+        boardRole: card.boardRole,
+        columnTitle: card.columnTitle,
+        attachments: attachments.filter((attachment) => attachment.subtaskId === subtask.id)
+      };
+
+      if (subtask.assigneeId === req.user.id) assignedTasks.push(task);
+      if (subtask.status === 'review' && (card.boardRole === 'owner' || card.managerId === req.user.id)) {
+        reviewTasks.push(task);
+      }
+    });
+  });
+
+  res.json({ assignedTasks, reviewTasks });
+});
+
+app.patch('/api/boards/:boardId/cards/:cardId/subtasks/:subtaskId/status', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+  const card = board ? getCardForBoard(req.params.cardId, board.id) : null;
+  const subtask = findSubtask(card, req.params.subtaskId);
+
+  if (!board || !card || !subtask) return res.status(404).json({ message: 'Subtask not found' });
+
+  const requestedStatus = String(req.body.status || '').trim();
+  const reviewNote = String(req.body.reviewNote || '').trim().slice(0, 1000);
+  const isAssignedMember = subtask.assigneeId === req.user.id;
+  const isReviewer = isOwner(board) || isCardManager(card, req.user.id);
+  const reviewerStatuses = new Set(['done', 'changes_requested']);
+  const memberTransitions = {
+    todo: new Set(['in_progress']),
+    in_progress: new Set(['review']),
+    changes_requested: new Set(['in_progress'])
+  };
+  const memberCanTransition = isAssignedMember && memberTransitions[subtask.status]?.has(requestedStatus);
+  const reviewerCanTransition = isReviewer && subtask.status === 'review' && reviewerStatuses.has(requestedStatus);
+
+  if (!memberCanTransition && !reviewerCanTransition) {
+    return res.status(403).json({ message: 'You cannot set this subtask status' });
+  }
+
+  if (requestedStatus === 'changes_requested' && !reviewNote) {
+    return res.status(400).json({ message: 'A review note is required when requesting changes' });
+  }
+
+  const nextChecklist = card.checklist.map((item) => item.id === subtask.id ? {
+    ...item,
+    status: requestedStatus,
+    reviewNote: requestedStatus === 'review' ? '' : reviewNote || item.reviewNote || '',
+    reviewedAt: reviewerStatuses.has(requestedStatus) ? new Date().toISOString() : null,
+    reviewedBy: reviewerStatuses.has(requestedStatus) ? req.user.id : null
+  } : item);
+
+  db.prepare(`UPDATE cards SET checklist = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+    .run(JSON.stringify(nextChecklist), card.id);
+  db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
+
+  const action = requestedStatus === 'review'
+    ? 'subtask_submitted'
+    : requestedStatus === 'done'
+      ? 'subtask_approved'
+      : requestedStatus === 'changes_requested'
+        ? 'subtask_changes_requested'
+        : 'subtask_status_updated';
+  logActivity(board.id, req.user.id, action, 'card', card.id, {
+    subtaskId: subtask.id,
+    subtaskTitle: subtask.text,
+    status: requestedStatus,
+    reviewNote
+  });
+
+  if (requestedStatus === 'review') {
+    new Set([card.assigneeId, board.ownerId]).forEach((userId) => createNotification({
+      userId,
+      boardId: board.id,
+      actorId: req.user.id,
+      type: 'subtask_review_requested',
+      entityType: 'card',
+      entityId: card.id,
+      message: `${req.user.name} أرسل المهمة «${subtask.text}» للمراجعة في البطاقة «${card.title}»`
+    }));
+  } else if (reviewerStatuses.has(requestedStatus)) {
+    createNotification({
+      userId: subtask.assigneeId,
+      boardId: board.id,
+      actorId: req.user.id,
+      type: requestedStatus === 'done' ? 'subtask_approved' : 'subtask_changes_requested',
+      entityType: 'card',
+      entityId: card.id,
+      message: requestedStatus === 'done'
+        ? `${req.user.name} اعتمد المهمة «${subtask.text}»`
+        : `${req.user.name} طلب تعديلات على المهمة «${subtask.text}»`
+    });
+  }
+
+  const updatedCard = getCardForBoard(card.id, board.id);
+  const updatedTask = findSubtask(updatedCard, subtask.id);
+  const activity = getActivityForCard(card.id, board.id);
+  io.to(`board:${board.id}`).emit('board:card-updated', { boardId: board.id, card: updatedCard, activity: activity[0] });
+  res.json({ task: { ...updatedTask, attachments: getSubtaskAttachments(card.id, subtask.id) }, card: updatedCard, activity: activity[0] });
+});
+
+app.post(
+  '/api/boards/:boardId/cards/:cardId/subtasks/:subtaskId/attachments',
+  requireAuth,
+  express.raw({ type: 'application/octet-stream', limit: '5mb' }),
+  (req, res) => {
+    const board = getBoardForUser(req.params.boardId, req.user.id);
+    const card = board ? getCardForBoard(req.params.cardId, board.id) : null;
+    const subtask = findSubtask(card, req.params.subtaskId);
+    if (!board || !card || !subtask) return res.status(404).json({ message: 'Subtask not found' });
+
+    const isAssignedMember = subtask.assigneeId === req.user.id;
+    const isReviewer = isOwner(board) || isCardManager(card, req.user.id);
+    if (!isAssignedMember && !isReviewer) return res.status(403).json({ message: 'Only the assignee or reviewer can upload deliverables' });
+    if (isAssignedMember && ['review', 'done'].includes(subtask.status) && !isReviewer) {
+      return res.status(400).json({ message: 'Deliverables cannot be changed while the task is under review or approved' });
+    }
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) return res.status(400).json({ message: 'Attachment file is required' });
+    if (req.body.length > maxAttachmentSize) return res.status(413).json({ message: 'Attachment must not exceed 5 MB' });
+
+    let originalName;
+    try {
+      originalName = decodeURIComponent(String(req.headers['x-file-name'] || ''));
+    } catch {
+      return res.status(400).json({ message: 'Invalid attachment name' });
+    }
+    originalName = basename(originalName.replace(/\\/g, '/')).replace(/[\u0000-\u001f]/g, '').trim().slice(0, 180);
+    const mimeType = String(req.headers['x-file-type'] || '').toLowerCase();
+    if (!originalName) return res.status(400).json({ message: 'Attachment name is required' });
+    if (!allowedAttachmentTypes.has(mimeType)) return res.status(400).json({ message: 'This attachment type is not supported' });
+
+    const attachmentId = randomUUID();
+    const storedName = attachmentId;
+    const filePath = join(uploadsDir, storedName);
+    writeFileSync(filePath, req.body, { flag: 'wx' });
+    try {
+      db.prepare(`
+        INSERT INTO subtask_attachments (id, card_id, subtask_id, user_id, original_name, stored_name, mime_type, size)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(attachmentId, card.id, subtask.id, req.user.id, originalName, storedName, mimeType, req.body.length);
+    } catch (error) {
+      if (existsSync(filePath)) unlinkSync(filePath);
+      throw error;
+    }
+
+    logActivity(board.id, req.user.id, 'subtask_attachment_added', 'card', card.id, {
+      subtaskId: subtask.id,
+      subtaskTitle: subtask.text,
+      fileName: originalName
+    });
+    const attachment = getSubtaskAttachments(card.id, subtask.id).find((item) => item.id === attachmentId);
+    const activity = getActivityForCard(card.id, board.id);
+    io.to(`board:${board.id}`).emit('board:subtask-updated', { boardId: board.id, cardId: card.id, subtaskId: subtask.id, activity: activity[0] });
+    res.status(201).json({ attachment, activity: activity[0] });
+  }
+);
+
+app.get('/api/boards/:boardId/cards/:cardId/subtasks/:subtaskId/attachments/:attachmentId/download', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+  const card = board ? getCardForBoard(req.params.cardId, board.id) : null;
+  const subtask = findSubtask(card, req.params.subtaskId);
+  if (!board || !card || !subtask) return res.status(404).json({ message: 'Subtask not found' });
+
+  const attachment = db.prepare(`
+    SELECT original_name AS name, stored_name AS storedName, mime_type AS mimeType
+    FROM subtask_attachments WHERE id = ? AND card_id = ? AND subtask_id = ?
+  `).get(req.params.attachmentId, card.id, subtask.id);
+  if (!attachment || !existsSync(join(uploadsDir, attachment.storedName))) return res.status(404).json({ message: 'Attachment not found' });
+  res.type(attachment.mimeType);
+  return res.download(join(uploadsDir, attachment.storedName), attachment.name);
+});
+
+app.delete('/api/boards/:boardId/cards/:cardId/subtasks/:subtaskId/attachments/:attachmentId', requireAuth, (req, res) => {
+  const board = getBoardForUser(req.params.boardId, req.user.id);
+  const card = board ? getCardForBoard(req.params.cardId, board.id) : null;
+  const subtask = findSubtask(card, req.params.subtaskId);
+  if (!board || !card || !subtask) return res.status(404).json({ message: 'Subtask not found' });
+
+  const attachment = db.prepare(`
+    SELECT id, user_id AS uploadedBy, original_name AS name, stored_name AS storedName
+    FROM subtask_attachments WHERE id = ? AND card_id = ? AND subtask_id = ?
+  `).get(req.params.attachmentId, card.id, subtask.id);
+  if (!attachment) return res.status(404).json({ message: 'Attachment not found' });
+
+  const isReviewer = isOwner(board) || isCardManager(card, req.user.id);
+  const canDeleteOwn = attachment.uploadedBy === req.user.id && subtask.assigneeId === req.user.id && !['review', 'done'].includes(subtask.status);
+  if (!isReviewer && !canDeleteOwn) return res.status(403).json({ message: 'You cannot delete this deliverable' });
+
+  db.prepare('DELETE FROM subtask_attachments WHERE id = ?').run(attachment.id);
+  const filePath = join(uploadsDir, attachment.storedName);
+  if (existsSync(filePath)) unlinkSync(filePath);
+  logActivity(board.id, req.user.id, 'subtask_attachment_deleted', 'card', card.id, {
+    subtaskId: subtask.id,
+    subtaskTitle: subtask.text,
+    fileName: attachment.name
+  });
+  const activity = getActivityForCard(card.id, board.id);
+  io.to(`board:${board.id}`).emit('board:subtask-updated', {
+    boardId: board.id,
+    cardId: card.id,
+    subtaskId: subtask.id,
+    activity: activity[0]
+  });
+  res.json({ attachmentId: attachment.id });
 });
 
 app.post(
@@ -1948,23 +2204,56 @@ app.patch('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
     assigneeId !== (existingCard.assigneeId || null) ||
     priority !== (existingCard.priority || 'normal') ||
     JSON.stringify(tags) !== JSON.stringify(existingCard.tags || []);
+  const changedFields = [
+    title !== existingCard.title && 'title',
+    description !== (existingCard.description || '') && 'description',
+    dueDate !== (existingCard.dueDate || null) && 'dueDate',
+    assigneeId !== (existingCard.assigneeId || null) && 'assignee',
+    priority !== (existingCard.priority || 'normal') && 'priority',
+    JSON.stringify(tags) !== JSON.stringify(existingCard.tags || []) && 'tags',
+    JSON.stringify(checklist) !== JSON.stringify(existingCard.checklist || []) && 'checklist'
+  ].filter(Boolean);
 
   if (!userIsOwner && ownerControlledFieldsChanged) {
     return res.status(403).json({ message: 'Only the board owner can edit card details or assign the card manager' });
   }
 
-  if (!userIsOwner && !userIsManager && !canUpdateOwnSubtaskStatuses(existingCard.checklist || [], checklist, req.user.id)) {
-    return res.status(403).json({ message: 'Members can only update the status of subtasks assigned to them' });
+  if (!userIsOwner && !userIsManager) {
+    return res.status(403).json({ message: 'Members must update assigned subtasks through the task workflow' });
   }
 
   const previousChecklistById = new Map(
     (existingCard.checklist || []).map((item) => [item.id, item])
   );
+  const checklistStatusChanged = checklist.some((item) => {
+    const previousItem = previousChecklistById.get(item.id);
+    return previousItem && previousItem.status !== item.status;
+  });
+
+  if (checklistStatusChanged) {
+    return res.status(400).json({ message: 'Subtask status must be changed through the task workflow' });
+  }
+
   const newlyAssignedSubtasks = checklist.filter((item) => {
     if (!item.assigneeId) return false;
     return previousChecklistById.get(item.id)?.assigneeId !== item.assigneeId;
   });
   const cardManagerChanged = assigneeId && assigneeId !== (existingCard.assigneeId || null);
+  const nextChecklistIds = new Set(checklist.map((item) => item.id));
+  const removedSubtaskIds = (existingCard.checklist || [])
+    .filter((item) => !nextChecklistIds.has(item.id))
+    .map((item) => item.id);
+
+  if (removedSubtaskIds.length) {
+    const placeholders = removedSubtaskIds.map(() => '?').join(',');
+    const removedAttachments = db.prepare(`
+      SELECT stored_name AS storedName FROM subtask_attachments
+      WHERE card_id = ? AND subtask_id IN (${placeholders})
+    `).all(existingCard.id, ...removedSubtaskIds);
+    db.prepare(`DELETE FROM subtask_attachments WHERE card_id = ? AND subtask_id IN (${placeholders})`)
+      .run(existingCard.id, ...removedSubtaskIds);
+    deleteStoredAttachments(removedAttachments);
+  }
 
   db.prepare(`
     UPDATE cards
@@ -1981,7 +2270,7 @@ app.patch('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
     WHERE id = ?
   `).run(title, description, dueDate, assigneeId, priority, JSON.stringify(tags), JSON.stringify(checklist), existingCard.id);
   db.prepare('UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(board.id);
-  logActivity(board.id, req.user.id, 'updated', 'card', existingCard.id, { title, priority });
+  logActivity(board.id, req.user.id, 'updated', 'card', existingCard.id, { title, priority, changedFields });
 
   if (cardManagerChanged) {
     createNotification({
@@ -2207,8 +2496,11 @@ app.delete('/api/boards/:boardId/cards/:cardId', requireAuth, (req, res) => {
 
   const storedAttachments = db.prepare(`
     SELECT stored_name AS storedName FROM attachments WHERE card_id = ?
-  `).all(card.id);
+    UNION ALL
+    SELECT stored_name AS storedName FROM subtask_attachments WHERE card_id = ?
+  `).all(card.id, card.id);
   db.prepare('DELETE FROM attachments WHERE card_id = ?').run(card.id);
+  db.prepare('DELETE FROM subtask_attachments WHERE card_id = ?').run(card.id);
   deleteStoredAttachments(storedAttachments);
 
   db.prepare(`

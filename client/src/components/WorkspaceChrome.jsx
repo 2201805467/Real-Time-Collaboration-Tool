@@ -99,12 +99,16 @@ function WorkspaceChrome({
           </button>
           <button
             type="button"
-            className={activeSection === 'kanban' ? 'active' : ''}
+            className={activeSection === 'kanban' || activeSection === 'task' ? 'active' : ''}
             onClick={() => onNavigate('kanban')}
             disabled={!selectedBoardId}
           >
             <KanbanSquare className="nav-icon" size={20} aria-hidden="true" />
             لوحة الكانبان
+          </button>
+          <button type="button" className={activeSection === 'my-tasks' ? 'active' : ''} onClick={() => onNavigate('my-tasks')}>
+            <ClipboardCheck className="nav-icon" size={20} aria-hidden="true" />
+            مهامي ومراجعاتي
           </button>
           <button
             type="button"
@@ -115,15 +119,6 @@ function WorkspaceChrome({
             <UsersRound className="nav-icon" size={20} aria-hidden="true" />
             إدارة الفريق والصلاحيات
             {boardMembersCount ? <span className="nav-badge">{boardMembersCount}</span> : null}
-          </button>
-          <button
-            type="button"
-            className={activeSection === 'task' ? 'active' : ''}
-            onClick={() => onNavigate('task')}
-            disabled={!selectedBoardId}
-          >
-            <ClipboardCheck className="nav-icon" size={20} aria-hidden="true" />
-            تفاصيل المهمة والنشاط
           </button>
         </nav>
 

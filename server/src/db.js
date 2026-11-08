@@ -107,6 +107,20 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
   );
 
+  CREATE TABLE IF NOT EXISTS subtask_attachments (
+    id TEXT PRIMARY KEY,
+    card_id TEXT NOT NULL,
+    subtask_id TEXT NOT NULL,
+    user_id TEXT,
+    original_name TEXT NOT NULL,
+    stored_name TEXT NOT NULL UNIQUE,
+    mime_type TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+  );
+
   CREATE TABLE IF NOT EXISTS activity_logs (
     id TEXT PRIMARY KEY,
     board_id TEXT NOT NULL,
@@ -142,6 +156,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_cards_column_id ON cards(column_id);
   CREATE INDEX IF NOT EXISTS idx_comments_card_id ON comments(card_id);
   CREATE INDEX IF NOT EXISTS idx_attachments_card_id ON attachments(card_id);
+  CREATE INDEX IF NOT EXISTS idx_subtask_attachments_task ON subtask_attachments(card_id, subtask_id);
   CREATE INDEX IF NOT EXISTS idx_activity_logs_board_id ON activity_logs(board_id);
   CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id, is_read, created_at);
 `);
