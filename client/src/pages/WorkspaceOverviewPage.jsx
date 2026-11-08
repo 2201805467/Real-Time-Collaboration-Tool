@@ -15,6 +15,7 @@ import {
   X,
   Zap
 } from 'lucide-react';
+import UserAvatar from '../components/UserAvatar.jsx';
 
 function WorkspaceOverviewPage({
   workspaceStats,
@@ -222,7 +223,7 @@ function WorkspaceOverviewPage({
                     </span>
                     <div className="hub-mini-avatars" aria-label={`${board.stats?.memberCount || 0} أعضاء`}>
                       {(board.stats?.memberPreview || []).map((member) => (
-                        <span key={member.id} title={member.name}>{member.name.slice(0, 1)}</span>
+                        <UserAvatar key={member.id} src={member.avatarUrl} name={member.name} />
                       ))}
                       {(board.stats?.memberCount || 0) > 3 ? (
                         <span title="أعضاء إضافيون">+{board.stats.memberCount - 3}</span>
@@ -277,7 +278,7 @@ function WorkspaceOverviewPage({
               ) : (
                 workspaceActivity.slice(0, 5).map((activity) => (
                   <article key={activity.id}>
-                    <span className="hub-feed-avatar">{(activity.actorName || 'ن').slice(0, 1)}</span>
+                    <UserAvatar src={activity.actorAvatarUrl} name={activity.actorName || 'ن'} className="hub-feed-avatar" />
                     <p>
                       <strong>{activity.actorName || 'النظام'}</strong>{' '}
                       {activity.action === 'created' ? 'أنشأ' : activity.action === 'updated' ? 'حدّث' : activity.action === 'moved' ? 'نقل' : activity.action === 'deleted' ? 'حذف' : activity.action === 'commented' ? 'علّق على' : 'غيّر'}{' '}

@@ -1,11 +1,55 @@
-import React, { useEffect, useState } from 'react';
-import { Bell, KeyRound, Moon, Save, Sun, UserRound } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Bell, Camera, KeyRound, Moon, Save, Sun, Trash2, UserRound } from 'lucide-react';
+import UserAvatar from '../components/UserAvatar.jsx';
+
+const acceptedAvatarTypes = ['image/jpeg', 'image/png', 'image/webp'];
+
+function resizeAvatar(file) {
+  return new Promise((resolve, reject) => {
+    if (!acceptedAvatarTypes.includes(file.type)) {
+      reject(new Error('Avatar must be a JPEG, PNG, or WebP image'));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      reject(new Error('Avatar source image is too large'));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read avatar image'));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error('Could not read avatar image'));
+      image.onload = () => {
+        const size = Math.min(image.naturalWidth, image.naturalHeight);
+        const canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 256;
+        canvas.getContext('2d').drawImage(
+          image,
+          (image.naturalWidth - size) / 2,
+          (image.naturalHeight - size) / 2,
+          size,
+          size,
+          0,
+          0,
+          256,
+          256
+        );
+        resolve(canvas.toDataURL('image/jpeg', 0.84));
+      };
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function SettingsPage({
   user,
   isDarkMode,
   onToggleTheme,
   onSaveProfile,
+  onSaveAvatar,
   onSavePassword,
   onSaveNotificationPreferences
 }) {
@@ -16,6 +60,7 @@ export default function SettingsPage({
   );
   const [savingSection, setSavingSection] = useState('');
   const [message, setMessage] = useState({ type: '', text: '' });
+  const avatarInputRef = useRef(null);
 
   useEffect(() => {
     setProfile({ name: user.name, email: user.email });
@@ -35,6 +80,12 @@ export default function SettingsPage({
         'Current password is incorrect': 'كلمة المرور الحالية غير صحيحة.',
         'New password must contain at least 6 characters': 'كلمة المرور الجديدة يجب أن تحتوي على 6 أحرف على الأقل.'
       };
+      Object.assign(translations, {
+        'Avatar must be a JPEG, PNG, or WebP image': 'اختر صورة بصيغة JPEG أو PNG أو WebP.',
+        'Avatar source image is too large': 'حجم الصورة الأصلية يجب ألا يتجاوز 5 ميجابايت.',
+        'Avatar image is too large': 'حجم الصورة بعد المعالجة كبير جدًا.',
+        'Could not read avatar image': 'تعذر قراءة الصورة المختارة.'
+      });
       setMessage({ type: 'error', text: translations[error.message] || error.message });
       return false;
     } finally {
@@ -45,6 +96,21 @@ export default function SettingsPage({
   async function submitProfile(event) {
     event.preventDefault();
     await runSave('profile', () => onSaveProfile(profile), 'تم تحديث بيانات الحساب.');
+  }
+
+  async function changeAvatar(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    await runSave('avatar', async () => {
+      const avatarUrl = await resizeAvatar(file);
+      await onSaveAvatar(avatarUrl);
+    }, 'تم تحديث الصورة الشخصية.');
+  }
+
+  async function removeAvatar() {
+    await runSave('avatar', () => onSaveAvatar(null), 'تم حذف الصورة الشخصية.');
   }
 
   async function submitPassword(event) {
@@ -73,13 +139,27 @@ export default function SettingsPage({
     <section className="settings-page" aria-label="الإعدادات العامة">
       <header className="settings-hero">
         <div><span>الحساب والتفضيلات</span><h2>الإعدادات العامة</h2><p>أدِر بيانات حسابك، الأمان، الإشعارات، ومظهر المنصة.</p></div>
-        <div className="settings-avatar">{user.name.slice(0, 2)}</div>
+        <UserAvatar src={user.avatarUrl} name={user.name} fallbackLength={2} className="settings-avatar" />
       </header>
 
       {message.text ? <p className={message.type === 'error' ? 'form-error settings-message' : 'form-success settings-message'}>{message.text}</p> : null}
 
       <div className="settings-grid">
         <form className="settings-card" onSubmit={submitProfile}>
+          <div className="settings-avatar-editor">
+            <UserAvatar src={user.avatarUrl} name={user.name} fallbackLength={2} className="settings-avatar settings-avatar-preview" />
+            <div>
+              <strong>الصورة الشخصية</strong>
+              <small>ستظهر لأعضاء فريقك وفي سجل النشاط. الحد الأقصى 5 ميجابايت.</small>
+              <div className="settings-avatar-actions">
+                <button type="button" onClick={() => avatarInputRef.current?.click()} disabled={savingSection === 'avatar'}>
+                  <Camera size={16} />{savingSection === 'avatar' ? 'جاري الحفظ...' : user.avatarUrl ? 'تعديل الصورة' : 'إضافة صورة'}
+                </button>
+                {user.avatarUrl ? <button type="button" className="settings-avatar-remove" onClick={removeAvatar} disabled={savingSection === 'avatar'}><Trash2 size={16} />حذف</button> : null}
+              </div>
+              <input ref={avatarInputRef} className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp" onChange={changeAvatar} />
+            </div>
+          </div>
           <div className="settings-card-title"><span><UserRound size={19} /></span><div><h3>الملف الشخصي</h3><p>المعلومات التي تظهر لأعضاء فريقك.</p></div></div>
           <label>الاسم<input value={profile.name} onChange={(event) => setProfile((current) => ({ ...current, name: event.target.value }))} required /></label>
           <label>البريد الإلكتروني<input type="email" value={profile.email} onChange={(event) => setProfile((current) => ({ ...current, email: event.target.value }))} required /></label>

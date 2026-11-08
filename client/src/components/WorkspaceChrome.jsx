@@ -10,6 +10,7 @@ import {
   Sun,
   UsersRound
 } from 'lucide-react';
+import UserAvatar from './UserAvatar.jsx';
 
 function WorkspaceChrome({
   boards,
@@ -196,7 +197,7 @@ function WorkspaceChrome({
                         setNotificationsOpen(false);
                       }}
                     >
-                      <span className="notification-avatar">{(notification.actorName || 'ن').slice(0, 1)}</span>
+                      <UserAvatar src={notification.actorAvatarUrl} name={notification.actorName || 'ن'} className="notification-avatar" />
                       <span>
                         <strong>{notification.message}</strong>
                         <small>{notification.boardTitle} · {new Date(notification.createdAt).toLocaleString('ar')}</small>
@@ -211,7 +212,7 @@ function WorkspaceChrome({
           <div className="topbar-presence" title="الأعضاء المتصلون">
             <div className="topbar-avatars">
               {presenceUsers.slice(0, 3).map((presenceUser) => (
-                <span key={presenceUser.socketId}>{presenceUser.name.slice(0, 1)}</span>
+                <UserAvatar key={presenceUser.socketId} src={presenceUser.avatarUrl} name={presenceUser.name} />
               ))}
               {presenceUsers.length > 3 ? <span>+{presenceUsers.length - 3}</span> : null}
             </div>

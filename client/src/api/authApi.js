@@ -20,6 +20,10 @@ export function updateProfile(profile, token) {
   return apiRequest('/api/auth/profile', { method: 'PATCH', token, body: profile });
 }
 
+export function updateAvatar(avatarUrl, token) {
+  return apiRequest('/api/auth/avatar', { method: 'PATCH', token, body: { avatarUrl } });
+}
+
 export function changePassword(passwords, token) {
   return apiRequest('/api/auth/password', { method: 'PATCH', token, body: passwords });
 }

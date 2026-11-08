@@ -12,6 +12,7 @@ import {
   Wifi,
   Zap
 } from 'lucide-react';
+import UserAvatar from '../components/UserAvatar.jsx';
 
 function formatLastSeen(lastSeen) {
   if (!lastSeen) return 'لم يُسجل ظهور سابق';
@@ -183,7 +184,7 @@ function TeamPage({
             return (
               <article key={member.id} className="team-row">
                 <div className="team-member-profile">
-                  <span className="member-avatar">{member.name.slice(0, 2)}</span>
+                  <UserAvatar src={member.avatarUrl} name={member.name} fallbackLength={2} className="member-avatar" />
                   <div>
                     <strong>{member.name}</strong>
                     <small>{member.email}</small>

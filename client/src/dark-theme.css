@@ -57,6 +57,17 @@
   background: #242a3e;
 }
 
+:root[data-theme="dark"] .settings-avatar-editor {
+  border-color: #3b435c;
+  background: #151a29;
+}
+
+:root[data-theme="dark"] .settings-avatar-actions .settings-avatar-remove {
+  border-color: #713642;
+  color: #ffb5bd;
+  background: #321b24;
+}
+
 :root[data-theme="dark"] .hub-metrics article {
   background: linear-gradient(145deg, #1c2233, #171b29);
 }

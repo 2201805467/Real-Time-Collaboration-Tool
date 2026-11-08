@@ -19,7 +19,7 @@ const io = new Server(httpServer, {
 const boardPresence = new Map();
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
@@ -30,7 +30,7 @@ io.use((socket, next) => {
   }
 
   const user = db
-    .prepare('SELECT id, name, email FROM users WHERE id = ?')
+    .prepare('SELECT id, name, email, avatar_url AS avatarUrl FROM users WHERE id = ?')
     .get(payload.sub);
 
   if (!user) {
@@ -46,9 +46,37 @@ function getPresenceList(boardId) {
     id: presence.id,
     name: presence.name,
     email: presence.email,
+    avatarUrl: presence.avatarUrl || null,
     socketId: presence.socketIds.values().next().value,
     connectionCount: presence.socketIds.size
   }));
+}
+
+function updateConnectedUser(user) {
+  const affectedBoards = new Set();
+
+  io.sockets.sockets.forEach((socket) => {
+    if (socket.data.user?.id !== user.id) return;
+
+    socket.data.user = {
+      ...socket.data.user,
+      name: user.name,
+      email: user.email,
+      avatarUrl: user.avatarUrl || null
+    };
+
+    socket.data.joinedBoards?.forEach((boardId) => {
+      const presence = boardPresence.get(boardId)?.get(user.id);
+      if (presence) {
+        presence.name = user.name;
+        presence.email = user.email;
+        presence.avatarUrl = user.avatarUrl || null;
+        affectedBoards.add(boardId);
+      }
+    });
+  });
+
+  affectedBoards.forEach(emitPresence);
 }
 
 function emitPresence(boardId) {
@@ -284,13 +312,46 @@ app.patch('/api/auth/profile', requireAuth, (req, res) => {
   }
 
   const user = db.prepare(`
-    SELECT id, name, email, created_at AS createdAt,
+    SELECT id, name, email, avatar_url AS avatarUrl, created_at AS createdAt,
       notify_assignments AS notifyAssignments,
       notify_comments AS notifyComments
     FROM users WHERE id = ?
   `).get(req.user.id);
   const publicUser = getPublicUser(user);
+  updateConnectedUser(publicUser);
   res.json({ user: publicUser, token: createToken(publicUser) });
+});
+
+app.patch('/api/auth/avatar', requireAuth, (req, res) => {
+  const avatarUrl = req.body.avatarUrl == null ? null : String(req.body.avatarUrl);
+  const avatarPattern = /^data:image\/(?:jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/;
+
+  if (avatarUrl) {
+    const match = avatarUrl.match(avatarPattern);
+    const decodedSize = match ? Buffer.byteLength(match[1], 'base64') : 0;
+
+    if (!match) {
+      return res.status(400).json({ message: 'Avatar must be a JPEG, PNG, or WebP image' });
+    }
+
+    if (decodedSize > 350 * 1024) {
+      return res.status(400).json({ message: 'Avatar image is too large' });
+    }
+  }
+
+  db.prepare(`
+    UPDATE users SET avatar_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+  `).run(avatarUrl, req.user.id);
+
+  const user = db.prepare(`
+    SELECT id, name, email, avatar_url AS avatarUrl, created_at AS createdAt,
+      notify_assignments AS notifyAssignments,
+      notify_comments AS notifyComments
+    FROM users WHERE id = ?
+  `).get(req.user.id);
+  const publicUser = getPublicUser(user);
+  updateConnectedUser(publicUser);
+  res.json({ user: publicUser });
 });
 
 app.patch('/api/auth/password', requireAuth, (req, res) => {
@@ -338,6 +399,7 @@ app.get('/api/notifications', requireAuth, (req, res) => {
       notifications.is_read AS isRead,
       notifications.created_at AS createdAt,
       users.name AS actorName,
+      users.avatar_url AS actorAvatarUrl,
       boards.title AS boardTitle
     FROM notifications
     LEFT JOIN users ON users.id = notifications.actor_id
@@ -451,6 +513,7 @@ function createNotification({ userId, boardId, actorId, type, entityType, entity
       notifications.is_read AS isRead,
       notifications.created_at AS createdAt,
       users.name AS actorName,
+      users.avatar_url AS actorAvatarUrl,
       boards.title AS boardTitle
     FROM notifications
     LEFT JOIN users ON users.id = notifications.actor_id
@@ -569,6 +632,7 @@ function getCardForBoard(cardId, boardId) {
         cards.description,
         cards.assignee_id AS assigneeId,
         assignee.name AS assigneeName,
+        assignee.avatar_url AS assigneeAvatarUrl,
         cards.due_date AS dueDate,
         cards.priority,
         cards.tags,
@@ -596,6 +660,7 @@ function getBoardMembers(boardId) {
         users.id,
         users.name,
         users.email,
+        users.avatar_url AS avatarUrl,
         board_members.role,
         board_members.joined_at AS joinedAt,
         board_members.last_seen AS lastSeen
@@ -621,6 +686,7 @@ function getCommentsForCard(cardId) {
         comments.card_id AS cardId,
         comments.user_id AS userId,
         users.name AS authorName,
+        users.avatar_url AS authorAvatarUrl,
         comments.body,
         comments.created_at AS createdAt,
         comments.updated_at AS updatedAt
@@ -643,7 +709,8 @@ function getActivityForCard(cardId, boardId) {
         activity_logs.metadata,
         activity_logs.created_at AS createdAt,
         users.name AS actorName,
-        users.email AS actorEmail
+        users.email AS actorEmail,
+        users.avatar_url AS actorAvatarUrl
       FROM activity_logs
       LEFT JOIN users ON users.id = activity_logs.user_id
       WHERE activity_logs.board_id = ?
@@ -687,7 +754,8 @@ function getBoardOverviewStats(boardId) {
     memberCount: members.length,
     memberPreview: members.slice(0, 3).map((member) => ({
       id: member.id,
-      name: member.name
+      name: member.name,
+      avatarUrl: member.avatarUrl || null
     }))
   };
 }
@@ -730,7 +798,8 @@ app.get('/api/workspace/activity', requireAuth, (req, res) => {
         activity_logs.metadata,
         activity_logs.created_at AS createdAt,
         boards.title AS boardTitle,
-        users.name AS actorName
+        users.name AS actorName,
+        users.avatar_url AS actorAvatarUrl
       FROM activity_logs
       INNER JOIN board_members ON board_members.board_id = activity_logs.board_id
       INNER JOIN boards ON boards.id = activity_logs.board_id
@@ -756,6 +825,7 @@ app.get('/api/workspace/activity', requireAuth, (req, res) => {
         comments.created_at AS createdAt,
         boards.title AS boardTitle,
         users.name AS actorName,
+        users.avatar_url AS actorAvatarUrl,
         cards.title AS cardTitle
       FROM comments
       INNER JOIN cards ON cards.id = comments.card_id
@@ -1025,6 +1095,7 @@ app.get('/api/boards/:boardId', requireAuth, (req, res) => {
         cards.description,
         cards.assignee_id AS assigneeId,
         assignee.name AS assigneeName,
+        assignee.avatar_url AS assigneeAvatarUrl,
         cards.due_date AS dueDate,
         cards.priority,
         cards.tags,
@@ -1352,6 +1423,7 @@ app.post('/api/boards/:boardId/columns/:columnId/cards', requireAuth, (req, res)
         cards.description,
         cards.assignee_id AS assigneeId,
         assignee.name AS assigneeName,
+        assignee.avatar_url AS assigneeAvatarUrl,
         cards.due_date AS dueDate,
         cards.priority,
         cards.tags,
@@ -1478,6 +1550,7 @@ app.patch('/api/boards/:boardId/cards/:cardId/move', requireAuth, (req, res) => 
         cards.description,
         cards.assignee_id AS assigneeId,
         assignee.name AS assigneeName,
+        assignee.avatar_url AS assigneeAvatarUrl,
         cards.due_date AS dueDate,
         cards.priority,
         cards.tags,
@@ -1805,6 +1878,7 @@ io.on('connection', (socket) => {
         id: user.id,
         name: user.name,
         email: user.email,
+        avatarUrl: user.avatarUrl || null,
         socketIds: new Set([socket.id])
       });
     }

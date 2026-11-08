@@ -83,6 +83,7 @@ export function getPublicUser(user) {
     id: user.id,
     name: user.name,
     email: user.email,
+    avatarUrl: user.avatarUrl || user.avatar_url || null,
     createdAt: user.createdAt || user.created_at || null,
     notificationPreferences: {
       assignments: Boolean(user.notifyAssignments ?? user.notify_assignments ?? 1),
@@ -102,7 +103,7 @@ export function requireAuth(req, res, next) {
 
   const user = db
     .prepare(`
-      SELECT id, name, email, created_at AS createdAt,
+      SELECT id, name, email, avatar_url AS avatarUrl, created_at AS createdAt,
         notify_assignments AS notifyAssignments,
         notify_comments AS notifyComments
       FROM users WHERE id = ?

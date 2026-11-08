@@ -382,6 +382,36 @@ test('owner, manager, and member permissions follow the project hierarchy', asyn
   assert.equal(updatedProfile.data.user.name, 'Updated Owner');
   assert.equal(updatedProfile.data.user.email, 'updated-owner@test.local');
 
+  const avatarUrl = 'data:image/png;base64,iVBORw0KGgo=';
+  const savedAvatar = await api('/api/auth/avatar', {
+    method: 'PATCH',
+    token: updatedProfile.data.token,
+    body: { avatarUrl }
+  });
+  assert.equal(savedAvatar.status, 200);
+  assert.equal(savedAvatar.data.user.avatarUrl, avatarUrl);
+
+  const currentUserWithAvatar = await api('/api/auth/me', {
+    token: updatedProfile.data.token
+  });
+  assert.equal(currentUserWithAvatar.status, 200);
+  assert.equal(currentUserWithAvatar.data.user.avatarUrl, avatarUrl);
+
+  const removedAvatar = await api('/api/auth/avatar', {
+    method: 'PATCH',
+    token: updatedProfile.data.token,
+    body: { avatarUrl: null }
+  });
+  assert.equal(removedAvatar.status, 200);
+  assert.equal(removedAvatar.data.user.avatarUrl, null);
+
+  const invalidAvatar = await api('/api/auth/avatar', {
+    method: 'PATCH',
+    token: updatedProfile.data.token,
+    body: { avatarUrl: 'not-an-image' }
+  });
+  assert.equal(invalidAvatar.status, 400);
+
   const duplicateProfileEmail = await api('/api/auth/profile', {
     method: 'PATCH',
     token: updatedProfile.data.token,

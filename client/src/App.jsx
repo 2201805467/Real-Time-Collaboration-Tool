@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { matchPath, useLocation, useNavigate } from 'react-router-dom';
 import WorkspaceChrome from './components/WorkspaceChrome.jsx';
+import UserAvatar from './components/UserAvatar.jsx';
 import ShareBoardDialog from './components/ShareBoardDialog.jsx';
 import TeamPage from './pages/TeamPage.jsx';
 import WorkspaceOverviewPage from './pages/WorkspaceOverviewPage.jsx';
@@ -73,6 +74,7 @@ function App() {
     setAuthError,
     submitAuth,
     saveProfile,
+    saveAvatar,
     savePassword,
     saveNotificationPreferences,
     logout,
@@ -1439,6 +1441,7 @@ function App() {
               isDarkMode={isDarkMode}
               onToggleTheme={toggleTheme}
               onSaveProfile={saveProfile}
+              onSaveAvatar={saveAvatar}
               onSavePassword={savePassword}
               onSaveNotificationPreferences={saveNotificationPreferences}
             />
@@ -1456,9 +1459,7 @@ function App() {
                     <span className="presence-empty">بانتظار أعضاء الفريق</span>
                   ) : (
                     presenceUsers.map((presenceUser) => (
-                      <span key={presenceUser.socketId} className="presence-user" title={presenceUser.email}>
-                        {presenceUser.name.slice(0, 2)}
-                      </span>
+                      <UserAvatar key={presenceUser.socketId} src={presenceUser.avatarUrl} name={presenceUser.name} fallbackLength={2} className="presence-user" title={presenceUser.email} />
                     ))
                   )}
                   {presenceUsers.length > 0 ? (

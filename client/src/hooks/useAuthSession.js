@@ -3,6 +3,7 @@ import {
   authenticate,
   changePassword,
   getCurrentUser,
+  updateAvatar,
   updateNotificationPreferences,
   updateProfile
 } from '../api/authApi.js';
@@ -87,6 +88,12 @@ export default function useAuthSession() {
     return changePassword(passwords, token);
   }
 
+  async function saveAvatar(avatarUrl) {
+    const data = await updateAvatar(avatarUrl, token);
+    setUser(data.user);
+    return data.user;
+  }
+
   async function saveNotificationPreferences(preferences) {
     const data = await updateNotificationPreferences(preferences, token);
     setUser((currentUser) => ({
@@ -104,6 +111,7 @@ export default function useAuthSession() {
     setAuthError,
     submitAuth,
     saveProfile,
+    saveAvatar,
     savePassword,
     saveNotificationPreferences,
     logout,

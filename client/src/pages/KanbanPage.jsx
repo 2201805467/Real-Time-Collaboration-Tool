@@ -2,6 +2,7 @@ import React from 'react';
 import { DndContext, useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { Calendar, CircleCheck, ListChecks, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
+import UserAvatar from '../components/UserAvatar.jsx';
 
 const priorityStyles = {
   urgent: 'bg-error-container text-on-error-container',
@@ -86,9 +87,7 @@ function DraggableCard({ card, onOpen, canMove }) {
       ) : null}
       <div className="flex items-center justify-between gap-space-sm pt-space-xs">
         {card.assigneeName ? (
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-tertiary-container text-[10px] font-semibold text-on-tertiary ring-2 ring-surface-container-lowest" title={card.assigneeName}>
-            {card.assigneeName.slice(0, 2)}
-          </span>
+          <UserAvatar src={card.assigneeAvatarUrl} name={card.assigneeName} fallbackLength={2} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-tertiary-container text-[10px] font-semibold text-on-tertiary ring-2 ring-surface-container-lowest" />
         ) : <span />}
         <div className="flex items-center gap-3 text-label-sm text-on-surface-variant">
           {card.checklistTotal ? <span className="inline-flex items-center gap-1"><CircleCheck size={15} /><span>{progress}%</span></span> : null}
